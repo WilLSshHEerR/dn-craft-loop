@@ -1,0 +1,358 @@
+
+/* ==========================================================
+   1. VARIABLES Y RESET
+   ========================================================== */
+.lp{
+  --navy-900:#060B1C;
+  --navy-800:#0A1128;       
+  --navy-700:#0F1A3A;       
+  --navy-600:#16244C;       
+  --cyan:#00D4FF;
+  --cyan-soft:rgba(0,212,255,.14);
+  --cyan-glow:rgba(0,212,255,.35);
+  --white:#FFFFFF;
+  --text:rgba(255,255,255,.92);
+  --muted:rgba(255,255,255,.74);   
+  --line:rgba(255,255,255,.10);
+  --font-title:"Syne",system-ui,sans-serif;
+  --font-body:"DM Sans",system-ui,sans-serif;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --radius:18px;
+  --ease:cubic-bezier(.22,.8,.3,1);
+  --t:300ms;
+  --max:1180px;
+}
+.lp *,.lp *::before,.lp *::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:80px}
+.lp{
+  background:var(--navy-800);color:var(--text);
+  font-family:var(--font-body);font-size:1.0625rem;line-height:1.65;
+  -webkit-font-smoothing:antialiased;overflow-x:hidden;
+}
+.lp img,.lp svg,.lp canvas{display:block;max-width:100%}
+.lp a{color:inherit;text-decoration:none}
+.lp button,.lp input,.lp textarea{font:inherit;color:inherit}
+.lp ul{list-style:none}
+.lp :focus-visible{outline:2px solid var(--cyan);outline-offset:3px;border-radius:6px}
+.lp .skip{position:absolute;left:-999px;top:8px;background:var(--cyan);color:var(--navy-800);padding:.6rem 1rem;border-radius:8px;z-index:200;font-weight:700}
+.lp .skip:focus{left:8px}
+.lp .container{width:min(100% - 2.5rem,var(--max));margin-inline:auto}
+.lp section{position:relative;padding:clamp(4.5rem,10vw,8rem) 0}
+.lp h1,.lp h2,.lp h3{font-family:var(--font-title);font-weight:800;line-height:1.05;letter-spacing:-.02em;color:var(--white)}
+.lp h2{font-size:clamp(2rem,5vw,3.4rem);margin-bottom:1rem}
+.lp h3{font-size:1.25rem;line-height:1.2}
+.lp .tag{font-family:var(--mono);font-size:.85rem;color:var(--cyan);display:inline-block;margin-bottom:1rem;letter-spacing:.02em}
+.lp .lead{color:var(--muted);max-width:56ch}
+.lp .section-head{margin-bottom:3rem}
+.lp .sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}
+
+/* Barra de progreso de lectura */
+.lp .progress{position:fixed;inset:0 0 auto 0;height:3px;z-index:120;background:transparent}
+.lp .progress span{display:block;height:100%;width:100%;transform-origin:left;transform:scaleX(0);background:linear-gradient(90deg,var(--cyan),#fff);box-shadow:0 0 12px var(--cyan)}
+
+/* ==========================================================
+   2. BOTONES (relleno animado, flecha, brillo con cursor)
+   ========================================================== */
+.lp .btn{
+  --mx:50%;--my:50%;
+  position:relative;display:inline-flex;align-items:center;gap:.65rem;overflow:hidden;
+  padding:.95rem 1.6rem;border-radius:999px;font-weight:700;cursor:pointer;
+  border:1.5px solid var(--cyan);isolation:isolate;
+  transition:color var(--t) var(--ease),transform var(--t) var(--ease),box-shadow var(--t) var(--ease);
+}
+.lp .btn::before{
+/* relleno animado */
+ 
+  content:"";position:absolute;inset:0;z-index:-2;transform:translateY(101%);
+  background:var(--cyan);transition:transform var(--t) var(--ease);
+}
+.lp .btn::after{
+/* brillo que sigue al cursor */
+ 
+  content:"";position:absolute;inset:0;z-index:-1;opacity:0;transition:opacity var(--t);
+  background:radial-gradient(120px circle at var(--mx) var(--my),rgba(255,255,255,.55),transparent 70%);
+}
+.lp .btn:hover::after{opacity:1}
+.lp .btn .arrow{transition:transform var(--t) var(--ease)}
+.lp .btn:hover .arrow{transform:translateX(6px)}
+.lp .btn-cta{background:var(--cyan);color:var(--navy-800);box-shadow:0 0 0 0 var(--cyan-glow)}
+.lp .btn-cta:hover{box-shadow:0 8px 30px var(--cyan-glow);transform:translateY(-2px)}
+.lp .btn-ghost{color:var(--white);background:transparent}
+.lp .btn-ghost:hover{color:var(--navy-800)}
+.lp .btn-ghost:hover::before{transform:translateY(0)}
+.lp .btn-lg{padding:1.2rem 2.2rem;font-size:1.15rem}
+
+/* ==========================================================
+   3. NAVBAR (glassmorphism)
+   ========================================================== */
+.lp .nav{
+  position:fixed;top:3px;left:0;right:0;z-index:100;
+  background:rgba(10,17,40,.55);backdrop-filter:blur(14px) saturate(140%);-webkit-backdrop-filter:blur(14px) saturate(140%);
+  border-bottom:1px solid var(--line);
+}
+.lp .nav-inner{display:flex;align-items:center;justify-content:space-between;height:68px}
+.lp .logo{display:flex;align-items:center;gap:.6rem;font-family:var(--font-title);font-weight:800;font-size:1.15rem;color:var(--white)}
+.lp .logo-mark{width:34px;height:34px;display:grid;place-items:center;border-radius:9px;background:var(--cyan-soft);border:1px solid var(--cyan-glow);color:var(--cyan)}
+.lp .logo b{color:var(--cyan);font-weight:800}
+.lp .menu{display:flex;align-items:center;gap:2rem}
+.lp .menu a:not(.btn){color:var(--muted);font-size:.97rem;position:relative;transition:color var(--t)}
+.lp .menu a:not(.btn)::after{content:"";position:absolute;left:0;bottom:-6px;height:2px;width:100%;background:var(--cyan);transform:scaleX(0);transform-origin:left;transition:transform var(--t) var(--ease)}
+.lp .menu a:not(.btn):hover{color:var(--white)}
+.lp .menu a:not(.btn):hover::after{transform:scaleX(1)}
+.lp .menu .btn{padding:.6rem 1.2rem;font-size:.95rem}
+.lp .burger{display:none;width:44px;height:44px;background:none;border:1px solid var(--line);border-radius:12px;cursor:pointer;place-items:center}
+.lp .burger span,.lp .burger span::before,.lp .burger span::after{display:block;width:20px;height:2px;background:var(--white);border-radius:2px;transition:transform var(--t) var(--ease),background var(--t)}
+.lp .burger span{position:relative}
+.lp .burger span::before,.lp .burger span::after{content:"";position:absolute;left:0}
+.lp .burger span::before{top:-6px}
+.lp .burger span::after{top:6px}
+.lp .burger[aria-expanded="true"] span{background:transparent}
+.lp .burger[aria-expanded="true"] span::before{transform:translateY(6px) rotate(45deg)}
+.lp .burger[aria-expanded="true"] span::after{transform:translateY(-6px) rotate(-45deg)}
+
+/* ==========================================================
+   4. HERO
+   ========================================================== */
+.lp .hero{min-height:100svh;display:flex;align-items:center;padding-top:7.5rem;overflow:hidden}
+.lp #bg{position:absolute;inset:0;width:100%;height:100%;z-index:0}
+.lp .hero::before{
+/* cuadrícula blueprint */
+ 
+  content:"";position:absolute;inset:0;z-index:0;
+  background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+  background-size:56px 56px;opacity:.45;
+  -webkit-mask-image:radial-gradient(ellipse at 50% 40%,#000 20%,transparent 75%);mask-image:radial-gradient(ellipse at 50% 40%,#000 20%,transparent 75%);
+}
+.lp .hero::after{content:"";position:absolute;width:620px;height:620px;right:-180px;top:-80px;background:radial-gradient(circle,var(--cyan-soft),transparent 65%);z-index:0;pointer-events:none}
+.lp .hero-grid{position:relative;z-index:1;display:grid;gap:3rem;align-items:center}
+.lp .hero h1{font-size:clamp(2.5rem,7.2vw,5rem);margin:.5rem 0 1.4rem}
+.lp .hero h1 em{font-style:normal;color:var(--cyan);text-shadow:0 0 40px var(--cyan-glow)}
+.lp .hero .lead{font-size:1.2rem;margin-bottom:2rem}
+.lp .cta-row{display:flex;flex-wrap:wrap;gap:1rem}
+.lp .terminal-line{margin-top:2.2rem;font-family:var(--mono);font-size:.9rem;color:var(--muted)}
+.lp .terminal-line .ok{color:var(--cyan)}
+
+/* Editor de código */
+.lp .editor{background:rgba(6,11,28,.85);border:1px solid var(--navy-600);border-radius:var(--radius);box-shadow:0 30px 80px rgba(0,0,0,.5),0 0 0 1px var(--cyan-soft),0 0 60px -20px var(--cyan-glow);overflow:hidden;backdrop-filter:blur(6px)}
+.lp .editor-bar{display:flex;align-items:center;gap:.5rem;padding:.8rem 1rem;border-bottom:1px solid var(--line);background:rgba(255,255,255,.03)}
+.lp .dot{width:11px;height:11px;border-radius:50%;background:var(--navy-600)}
+.lp .dot:first-child{background:var(--cyan)}
+.lp .editor-bar .file{margin-left:.8rem;font-family:var(--mono);font-size:.8rem;color:var(--muted)}
+.lp .code{display:grid;grid-template-columns:auto 1fr;font-family:var(--mono);font-size:.88rem;line-height:1.85;padding:1.1rem 0;min-height:330px}
+.lp .ln{padding:0 1rem;text-align:right;color:rgba(255,255,255,.38);user-select:none;white-space:pre}
+.lp .src{white-space:pre;overflow-x:auto;padding-right:1rem;color:var(--white)}
+.lp .k{color:var(--cyan)}
+.lp .s{color:#9be8ff}
+.lp .c{color:rgba(255,255,255,.55);font-style:italic}
+.lp .f{color:#fff;font-weight:700}
+.lp .caret{display:inline-block;width:8px;height:1.1em;background:var(--cyan);vertical-align:text-bottom;margin-left:2px;animation:lp-blink 1s steps(1) infinite}
+
+@keyframes lp-blink{50%{opacity:0}}
+
+/* ==========================================================
+   5. SERVICIOS
+   ========================================================== */
+.lp .cards{display:grid;gap:1.25rem;grid-template-columns:1fr}
+.lp .card{
+  --mx:50%;--my:50%;
+  position:relative;padding:2rem;border-radius:var(--radius);background:var(--navy-700);border:1px solid var(--line);overflow:hidden;
+  transition:transform var(--t) var(--ease),border-color var(--t),box-shadow var(--t);
+}
+.lp .card::before{content:"";position:absolute;inset:0;opacity:0;transition:opacity var(--t);pointer-events:none;
+  background:radial-gradient(320px circle at var(--mx) var(--my),var(--cyan-soft),transparent 70%)}
+.lp .card:hover{transform:translateY(-6px);border-color:var(--cyan-glow);box-shadow:0 20px 50px -20px var(--cyan-glow)}
+.lp .card:hover::before{opacity:1}
+.lp .card > *{position:relative}
+.lp .icon{width:54px;height:54px;border-radius:14px;display:grid;place-items:center;margin-bottom:1.3rem;background:var(--cyan-soft);color:var(--cyan);border:1px solid var(--cyan-glow);transition:box-shadow var(--t),transform var(--t) var(--ease)}
+.lp .card:hover .icon{box-shadow:0 0 24px var(--cyan-glow);transform:rotate(-6deg) scale(1.06)}
+.lp .icon svg{width:28px;height:28px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.lp .card h3{margin-bottom:.6rem}
+.lp .card p{color:var(--muted);font-size:.98rem}
+
+/* ==========================================================
+   6. PROCESO (línea de tiempo / loop)
+   ========================================================== */
+.lp .process{background:linear-gradient(180deg,transparent,var(--navy-900) 20%,var(--navy-900) 80%,transparent)}
+.lp .steps{position:relative;display:grid;gap:2rem;counter-reset:s;padding-left:2.4rem}
+.lp .steps::before{content:"";position:absolute;left:11px;top:6px;bottom:6px;width:2px;background:var(--line)}
+.lp .steps::after{content:"";position:absolute;left:11px;top:6px;width:2px;height:calc((100% - 12px) * var(--p,0));background:var(--cyan);box-shadow:0 0 12px var(--cyan);transition:height 1.2s var(--ease),width 1.2s var(--ease)}
+.lp .step{position:relative}
+.lp .step::before{counter-increment:s;content:"";position:absolute;left:-2.4rem;top:4px;width:24px;height:24px;border-radius:50%;background:var(--navy-800);border:2px solid var(--navy-600);transition:border-color var(--t),box-shadow var(--t)}
+.lp .step.in::before{border-color:var(--cyan);box-shadow:0 0 16px var(--cyan-glow)}
+.lp .step .num{font-family:var(--mono);color:var(--cyan);font-size:.85rem}
+.lp .step h3{margin:.2rem 0 .4rem;font-size:1.5rem}
+.lp .step p{color:var(--muted);max-width:42ch}
+.lp .loop-note{margin-top:2.5rem;display:inline-flex;align-items:center;gap:.8rem;font-family:var(--mono);font-size:.88rem;color:var(--muted);padding:.8rem 1.1rem;border:1px dashed var(--cyan-glow);border-radius:12px}
+.lp .loop-note svg{width:22px;height:22px;stroke:var(--cyan);fill:none;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round;animation:lp-spin 6s linear infinite}
+
+@keyframes lp-spin{to{transform:rotate(360deg)}}
+
+/* ==========================================================
+   7. TECNOLOGÍAS (marquee)
+   ========================================================== */
+.lp .tech{padding:3.5rem 0;border-block:1px solid var(--line);background:var(--navy-900)}
+.lp .marquee{overflow:hidden;-webkit-mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent);mask-image:linear-gradient(90deg,transparent,#000 12%,#000 88%,transparent)}
+.lp .track{display:flex;gap:1rem;width:max-content;animation:lp-scroll 32s linear infinite}
+.lp .marquee:hover .track{animation-play-state:paused}
+.lp .chip{font-family:var(--mono);font-size:1.05rem;padding:.8rem 1.6rem;border:1px solid var(--navy-600);border-radius:999px;color:var(--white);background:var(--navy-700);white-space:nowrap}
+.lp .chip::before{content:"</> ";color:var(--cyan)}
+
+@keyframes lp-scroll{to{transform:translateX(-50%)}}
+
+/* ==========================================================
+   8. PROYECTOS (mockups CSS + tilt 3D)
+   ========================================================== */
+.lp .projects{display:grid;gap:1.5rem;grid-template-columns:1fr}
+.lp .project{perspective:900px}
+.lp .tilt{
+  --rx:0deg;--ry:0deg;--mx:50%;--my:50%;
+  position:relative;border-radius:var(--radius);background:var(--navy-700);border:1px solid var(--line);padding:1.2rem 1.2rem 1.6rem;
+  transform:rotateX(var(--rx)) rotateY(var(--ry));transform-style:preserve-3d;
+  transition:transform 200ms var(--ease),border-color var(--t),box-shadow var(--t);will-change:transform;
+}
+.lp .tilt::after{content:"";position:absolute;inset:0;border-radius:inherit;pointer-events:none;opacity:0;transition:opacity var(--t);
+  background:radial-gradient(300px circle at var(--mx) var(--my),var(--cyan-soft),transparent 70%)}
+.lp .tilt:hover{border-color:var(--cyan-glow);box-shadow:0 30px 60px -25px var(--cyan-glow)}
+.lp .tilt:hover::after{opacity:1}
+.lp .mock{height:200px;border-radius:12px;background:var(--navy-900);border:1px solid var(--line);overflow:hidden;position:relative;transform:translateZ(30px);margin-bottom:1.3rem}
+.lp .mock .mbar{height:20px;background:rgba(255,255,255,.05);display:flex;gap:4px;align-items:center;padding-left:8px}
+.lp .mock .mbar i{width:6px;height:6px;border-radius:50%;background:var(--navy-600)}
+.lp .mock .body{padding:12px;display:grid;gap:8px}
+.lp .b{border-radius:6px;background:var(--navy-600)}
+.lp .b.c{background:var(--cyan)}
+.lp .b.s{background:var(--cyan-soft);border:1px solid var(--cyan-glow)}
+
+/* mock 1: tienda */
+.lp .m1 .body{grid-template-columns:repeat(3,1fr)}
+.lp .m1 .hd{grid-column:1/-1;height:46px;background:linear-gradient(90deg,var(--cyan-soft),transparent);border:1px solid var(--cyan-glow)}
+.lp .m1 .b:not(.hd){height:70px}
+
+/* mock 2: dashboard */
+.lp .m2 .body{grid-template-columns:44px 1fr;height:calc(100% - 20px)}
+.lp .m2 .side{grid-row:1/3}
+.lp .m2 .chart{display:flex;align-items:flex-end;gap:6px;padding:8px;height:84px}
+.lp .m2 .chart i{flex:1;background:var(--cyan);border-radius:3px 3px 0 0;opacity:.85}
+.lp .m2 .row{height:26px}
+
+/* mock 3: app móvil */
+.lp .m3{display:grid;place-items:center}
+.lp .phone{width:96px;height:176px;margin-top:10px;border:2px solid var(--navy-600);border-radius:18px;padding:10px 8px;display:grid;gap:6px;align-content:start;background:var(--navy-800)}
+.lp .phone .b{height:14px}
+.lp .phone .b.big{height:56px}
+.lp .project .meta{font-family:var(--mono);font-size:.8rem;color:var(--cyan)}
+.lp .project h3{margin:.4rem 0 .4rem}
+.lp .project p{color:var(--muted);font-size:.97rem}
+.lp .project .meta,.lp .project h3,.lp .project p{transform:translateZ(14px)}
+
+/* ==========================================================
+   9. CIFRAS
+   ========================================================== */
+.lp .stats{display:grid;grid-template-columns:repeat(2,1fr);gap:2rem 1rem}
+.lp .stat{border-left:2px solid var(--cyan);padding-left:1.2rem}
+.lp .stat strong{display:block;font-family:var(--font-title);font-weight:800;font-size:clamp(2.4rem,6vw,3.8rem);color:var(--white);line-height:1}
+.lp .stat strong span{color:var(--cyan)}
+.lp .stat p{color:var(--muted);margin-top:.5rem;font-size:.97rem}
+
+/* ==========================================================
+   10. CTA FINAL
+   ========================================================== */
+.lp .cta-box{position:relative;overflow:hidden;text-align:center;border-radius:28px;padding:clamp(3rem,8vw,6rem) 1.5rem;
+  background:linear-gradient(135deg,var(--navy-800) 0%,#0b2a5c 45%,rgba(0,212,255,.85) 140%);border:1px solid var(--cyan-glow)}
+.lp .cta-box h2{max-width:18ch;margin-inline:auto;font-size:clamp(2rem,5.5vw,3.8rem)}
+.lp .cta-box p{margin:0 auto 2rem;color:var(--text);max-width:50ch}
+.lp .cta-box .btn-cta{background:var(--white);border-color:var(--white)}
+.lp .cta-box .terminal-line{margin-top:1.6rem;color:var(--text)}
+
+/* ==========================================================
+   11. CONTACTO
+   ========================================================== */
+.lp .contact-grid{display:grid;gap:3rem}
+.lp .form{display:grid;gap:1.3rem}
+.lp .field label{display:block;font-family:var(--mono);font-size:.85rem;color:var(--cyan);margin-bottom:.45rem}
+.lp .field input,.lp .field textarea{
+  width:100%;padding:1rem 1.1rem;border-radius:12px;background:var(--navy-700);border:1.5px solid var(--navy-600);
+  transition:border-color var(--t),box-shadow var(--t),background var(--t);
+}
+.lp .field textarea{min-height:150px;resize:vertical}
+.lp .field input::placeholder,.lp .field textarea::placeholder{color:rgba(255,255,255,.5)}
+.lp .field input:focus,.lp .field textarea:focus{outline:none;border-color:var(--cyan);box-shadow:0 0 0 4px var(--cyan-soft);background:var(--navy-800)}
+.lp .field.invalid input,.lp .field.invalid textarea{border-color:#ff8fa3}
+.lp .err{display:none;color:#ffb3c0;font-size:.88rem;margin-top:.4rem}
+.lp .field.invalid .err{display:block}
+.lp .status{min-height:1.5em;font-family:var(--mono);font-size:.92rem;color:var(--cyan)}
+
+/* ==========================================================
+   12. FOOTER
+   ========================================================== */
+.lp footer{border-top:1px solid var(--line);padding:3.5rem 0 2rem;background:var(--navy-900)}
+.lp .foot{display:grid;gap:2rem}
+.lp .foot p{color:var(--muted);max-width:34ch;margin-top:.8rem;font-size:.95rem}
+.lp .foot ul{display:flex;flex-wrap:wrap;gap:.6rem 1.6rem}
+.lp .foot ul a{color:var(--muted);transition:color var(--t)}
+.lp .foot ul a:hover{color:var(--cyan)}
+.lp .social{display:flex;gap:.8rem}
+.lp .social a{width:44px;height:44px;display:grid;place-items:center;border:1px solid var(--navy-600);border-radius:12px;color:var(--white);transition:all var(--t) var(--ease)}
+.lp .social a:hover{border-color:var(--cyan);color:var(--cyan);box-shadow:0 0 20px var(--cyan-soft);transform:translateY(-3px)}
+.lp .social svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+.lp .copy{margin-top:2.5rem;padding-top:1.5rem;border-top:1px solid var(--line);font-family:var(--mono);font-size:.82rem;color:var(--muted)}
+
+/* ==========================================================
+   13. ANIMACIONES DE REVELADO
+   ========================================================== */
+.lp .rv{opacity:0;transform:translateY(28px);transition:opacity .7s var(--ease),transform .7s var(--ease);transition-delay:var(--d,0ms)}
+.lp .rv.in{opacity:1;transform:none}
+
+/* ==========================================================
+   14. RESPONSIVE (mobile-first)
+   ========================================================== */
+
+
+
+@media (max-width:859px){
+.lp .burger{display:grid}
+.lp .menu{position:absolute;top:68px;left:0;right:0;flex-direction:column;align-items:stretch;gap:0;padding:1rem 1.5rem 1.5rem;
+    background:rgba(10,17,40,.96);backdrop-filter:blur(14px);border-bottom:1px solid var(--line);
+    opacity:0;visibility:hidden;transform:translateY(-10px);transition:all var(--t) var(--ease)}
+.lp .menu.open{opacity:1;visibility:visible;transform:none}
+.lp .menu a:not(.btn){padding:.9rem 0;border-bottom:1px solid var(--line)}
+.lp .menu .btn{margin-top:1rem;justify-content:center}
+
+}
+
+@media (min-width:640px){
+.lp .cards{grid-template-columns:repeat(2,1fr)}
+.lp .stats{grid-template-columns:repeat(4,1fr)}
+}
+
+@media (min-width:860px){
+.lp .hero-grid{grid-template-columns:1.05fr .95fr}
+.lp .cards{grid-template-columns:repeat(3,1fr)}
+.lp .projects{grid-template-columns:repeat(3,1fr)}
+.lp .steps{grid-template-columns:repeat(4,1fr);padding:2.6rem 0 0;gap:1.5rem}
+.lp .steps::before{left:0;right:0;top:11px;bottom:auto;height:2px;width:auto}
+.lp .steps::after{left:0;top:11px;height:2px;width:calc(100% * var(--p,0))}
+.lp .step::before{left:0;top:-2.6rem}
+.lp .contact-grid{grid-template-columns:.8fr 1.2fr;align-items:start}
+.lp .foot{grid-template-columns:1.2fr 1fr auto;align-items:start}
+
+}
+
+/* ==========================================================
+   15. MOVIMIENTO REDUCIDO
+   ========================================================== */
+
+
+
+@media (prefers-reduced-motion:reduce){
+html{scroll-behavior:auto}
+.lp *,.lp *::before,.lp *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+.lp .rv{opacity:1;transform:none}
+.lp .track{animation:none}
+.lp .marquee{overflow-x:auto}
+
+}
+
+/* Ajustes específicos de React */
+.lp .cards>.rv>.card{height:100%}
+.lp .tilt{display:block}
+.lp .hero-grid>div>.tag{display:inline-block}

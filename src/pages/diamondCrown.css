@@ -1,0 +1,75 @@
+/* Diamond Crown: mismo lenguaje visual que la landing, con su paleta negro + dorado */
+.dc{
+  --gold:#d4af37;
+  --gold-light:#f0cc50;
+  --gold-soft:rgba(212,175,55,.14);
+  --gold-glow:rgba(212,175,55,.35);
+  --line:rgba(255,255,255,.10);
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  --ease:cubic-bezier(.22,.8,.3,1);
+  font-family:"DM Sans",system-ui,sans-serif;
+}
+.dc h1,.dc h2,.dc h3{font-family:"Syne",system-ui,sans-serif;font-weight:800;letter-spacing:-.02em}
+.dc :focus-visible{outline:2px solid var(--gold);outline-offset:3px;border-radius:6px}
+
+/* Barra de progreso */
+.dc .progress{position:fixed;inset:0 0 auto 0;height:3px;z-index:120}
+.dc .progress span{display:block;height:100%;width:100%;transform-origin:left;transform:scaleX(0);background:linear-gradient(90deg,var(--gold),#fff);box-shadow:0 0 12px var(--gold)}
+
+/* Nav glass */
+.dc .dc-nav{top:3px!important;background:rgba(7,7,9,.55)!important;backdrop-filter:blur(14px) saturate(140%)!important;-webkit-backdrop-filter:blur(14px) saturate(140%)!important}
+.dc .dc-logo{display:flex;align-items:center;gap:.6rem;font-family:"Syne",system-ui,sans-serif;font-weight:800;font-size:1.05rem;color:#fff;text-decoration:none}
+.dc .dc-logo-mark{width:34px;height:34px;display:grid;place-items:center;border-radius:9px;background:var(--gold-soft);border:1px solid var(--gold-glow);color:var(--gold)}
+.dc .dc-logo b{color:var(--gold)}
+@media (max-width:560px){.dc .dc-logo span:last-child{display:none}}
+
+/* Hero: cuadrícula blueprint + partículas */
+.dc .dc-grid{position:absolute;inset:0;pointer-events:none;opacity:.5;
+  background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
+  background-size:56px 56px;
+  -webkit-mask-image:radial-gradient(ellipse at 50% 40%,#000 20%,transparent 75%);mask-image:radial-gradient(ellipse at 50% 40%,#000 20%,transparent 75%)}
+.dc #bg{position:absolute;inset:0;width:100%;height:100%;display:block}
+
+/* Etiquetas y títulos */
+.dc .tag{font-family:var(--mono);font-size:.85rem;color:var(--gold);display:inline-block;margin-bottom:1rem}
+.dc .section-label{font-family:var(--mono);font-size:.85rem;font-weight:500;letter-spacing:.02em;text-transform:none;color:var(--gold)}
+.dc .section-label::before{content:"// "}
+.dc .section-title{font-family:"Syne",system-ui,sans-serif;font-weight:800;letter-spacing:-.02em}
+.dc .section-subtitle{color:rgba(255,255,255,.74)}
+
+/* Terminal */
+.dc .terminal-line{margin-top:2rem;font-family:var(--mono);font-size:.9rem;color:rgba(255,255,255,.74)}
+.dc .terminal-line .ok{color:var(--gold)}
+.dc .caret{display:inline-block;width:8px;height:1.05em;background:var(--gold);vertical-align:text-bottom;margin-left:4px;animation:dc-blink 1s steps(1) infinite}
+@keyframes dc-blink{50%{opacity:0}}
+
+/* Botones: relleno animado + flecha + brillo del cursor */
+.dc .btn{--mx:50%;--my:50%;position:relative;display:inline-flex;align-items:center;gap:.65rem;overflow:hidden;isolation:isolate;
+  padding:.85rem 1.6rem;border-radius:999px;font-size:.92rem;font-weight:700;cursor:pointer;text-decoration:none;white-space:nowrap;
+  border:1.5px solid var(--gold);transition:color 300ms var(--ease),transform 300ms var(--ease),box-shadow 300ms var(--ease)}
+.dc .btn::before{content:"";position:absolute;inset:0;z-index:-2;transform:translateY(101%);background:var(--gold);transition:transform 300ms var(--ease)}
+.dc .btn::after{content:"";position:absolute;inset:0;z-index:-1;opacity:0;transition:opacity 300ms;background:radial-gradient(120px circle at var(--mx) var(--my),rgba(255,255,255,.5),transparent 70%)}
+.dc .btn:hover::after{opacity:1}
+.dc .btn .arrow{transition:transform 300ms var(--ease)}
+.dc .btn:hover .arrow{transform:translateX(6px)}
+.dc .btn-gold{background:var(--gold);color:#070709}
+.dc .btn-gold:hover{box-shadow:0 8px 30px var(--gold-glow);transform:translateY(-2px)}
+.dc .btn-ghost{background:transparent;color:#fff}
+.dc .btn-ghost:hover{color:#070709}
+.dc .btn-ghost:hover::before{transform:translateY(0)}
+.dc .btn-sm{padding:.5rem 1.1rem;font-size:.85rem}
+
+/* Tarjetas con brillo que sigue al cursor */
+.dc .dc-card{--mx:50%;--my:50%;overflow:hidden}
+.dc .dc-card::before{content:"";position:absolute;inset:0;pointer-events:none;opacity:0;transition:opacity 300ms;
+  background:radial-gradient(320px circle at var(--mx) var(--my),var(--gold-soft),transparent 70%)}
+.dc .dc-card:hover::before{opacity:1}
+.dc .dc-card{transition:transform 300ms var(--ease),border-color 300ms,background 300ms,box-shadow 300ms!important}
+.dc .dc-card:hover{box-shadow:0 20px 50px -22px var(--gold-glow)}
+
+/* CTA con degradado */
+.dc .dc-cta{border-radius:28px;border:1px solid var(--gold-glow);background:linear-gradient(135deg,#070709 0%,#1a1507 50%,rgba(212,175,55,.8) 150%)}
+
+@media (prefers-reduced-motion:reduce){
+  .dc *,.dc *::before,.dc *::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+}
