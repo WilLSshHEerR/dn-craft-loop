@@ -91,8 +91,8 @@ html{scroll-behavior:smooth;scroll-padding-top:80px}
   border-bottom:1px solid var(--line);
 }
 .lp .nav-inner{display:flex;align-items:center;justify-content:space-between;height:68px}
-.lp .logo{display:flex;align-items:center;gap:.6rem;font-family:var(--font-title);font-weight:800;font-size:1.15rem;color:var(--white)}
-.lp .logo-mark{width:34px;height:34px;display:grid;place-items:center;border-radius:9px;background:var(--cyan-soft);border:1px solid var(--cyan-glow);color:var(--cyan)}
+.lp .logo{display:flex;align-items:center;color:var(--white)}
+.lp .logo img{display:block;width:min(260px,68vw);height:auto}
 .lp .logo b{color:var(--cyan);font-weight:800}
 .lp .menu{display:flex;align-items:center;gap:2rem}
 .lp .menu a:not(.btn){color:var(--muted);font-size:.97rem;position:relative;transition:color var(--t)}

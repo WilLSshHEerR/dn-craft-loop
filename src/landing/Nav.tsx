@@ -1,15 +1,11 @@
 import { useEffect, useState } from 'react';
 import { trackGlow } from './hooks';
+import logo from '../assets/Logo Dn Craft & Loop.png';
 
 export function Logo({ label }: { label: string }) {
   return (
     <a href="#inicio" className="logo" aria-label={label}>
-      <span className="logo-mark" aria-hidden="true">
-        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M9 7l-5 5 5 5M15 7l5 5-5 5" />
-        </svg>
-      </span>
-      <span>Dn Craft <b>&amp;</b> Loop</span>
+      <img src={logo} alt="" aria-hidden="true" />
     </a>
   );
 }
