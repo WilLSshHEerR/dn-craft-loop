@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
-import type { FormEvent } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import type { FormEvent, KeyboardEvent, ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
+import logo from '../assets/Logo Dn Craft & Loop.png';
 import {
   DEFAULT_SITE_COPY,
   fetchAdminCopy,
@@ -66,11 +67,157 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Ocurrió un error inesperado.';
 }
 
+function ServicePreviewIcon({ icon }: { icon: Service['icon_key'] }) {
+  const shapes: Record<Service['icon_key'], ReactNode> = {
+    web: <><rect x="3" y="4" width="18" height="14" rx="2" /><path d="M3 8h18M8 21h8M12 18v3" /></>,
+    react: <><circle cx="12" cy="12" r="2" /><ellipse cx="12" cy="12" rx="10" ry="4" /><ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(60 12 12)" /><ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(120 12 12)" /></>,
+    backend: <><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v6c0 1.7 3.6 3 8 3s8-1.3 8-3V5M4 11v6c0 1.7 3.6 3 8 3s8-1.3 8-3v-6" /></>,
+    automation: <path d="M13 2 4 14h7l-1 8 9-12h-7z" />,
+    design: <><path d="M12 20h9" /><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4z" /></>,
+    support: <><path d="M12 2a10 10 0 0 0-3 19.5M12 2c4 3 5 8 3 12l-3 8M8 14l-4 2M15 14l5 2" /><circle cx="12" cy="10" r="2" /></>,
+  };
+  return <svg viewBox="0 0 24 24" aria-hidden="true">{shapes[icon]}</svg>;
+}
+
+type ChoiceOption<T extends string> = {
+  value: T;
+  label: string;
+  icon: string;
+  description?: string;
+};
+
+const projectPreviewOptions: ChoiceOption<Project['preview_kind']>[] = [
+  { value: 'shop', label: 'Tienda en línea', icon: '◇', description: 'Productos y comercio digital' },
+  { value: 'dashboard', label: 'Dashboard', icon: '▥', description: 'Paneles e información' },
+  { value: 'app', label: 'Aplicación', icon: '▯', description: 'Aplicaciones web y móviles' },
+];
+
+const serviceIconOptions: ChoiceOption<Service['icon_key']>[] = [
+  { value: 'web', label: 'Desarrollo web', icon: '⌘', description: 'Sitios y plataformas web' },
+  { value: 'react', label: 'React', icon: '◎', description: 'Aplicaciones e interfaces' },
+  { value: 'backend', label: 'Backend', icon: '▤', description: 'APIs y bases de datos' },
+  { value: 'automation', label: 'Automatización', icon: 'ϟ', description: 'Integraciones y procesos' },
+  { value: 'design', label: 'Diseño', icon: '✳', description: 'Experiencia e interfaz' },
+  { value: 'support', label: 'Soporte', icon: '⌁', description: 'Mantenimiento y despliegue' },
+];
+
+function ChoiceSelect<T extends string>({
+  label,
+  value,
+  options,
+  onChange,
+}: {
+  label: string;
+  value: T;
+  options: ChoiceOption<T>[];
+  onChange: (value: T) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(() => Math.max(0, options.findIndex(option => option.value === value)));
+  const rootRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const activeOption = options.find(option => option.value === value) ?? options[0];
+
+  useEffect(() => {
+    if (!open) return;
+    const closeOnOutsideClick = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    document.addEventListener('pointerdown', closeOnOutsideClick);
+    return () => document.removeEventListener('pointerdown', closeOnOutsideClick);
+  }, [open]);
+
+  const selectOption = (index: number) => {
+    const option = options[index];
+    if (!option) return;
+    onChange(option.value);
+    setActiveIndex(index);
+    setOpen(false);
+    triggerRef.current?.focus();
+  };
+
+  useEffect(() => {
+    if (open) rootRef.current?.querySelector<HTMLButtonElement>(`[data-option-index="${activeIndex}"]`)?.focus();
+  }, [open, activeIndex]);
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLButtonElement>) => {
+    if (event.key === 'Tab' && open) {
+      setOpen(false);
+    } else if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault();
+      if (!open) {
+        setActiveIndex(Math.max(0, options.findIndex(option => option.value === value)));
+        setOpen(true);
+        return;
+      }
+      setActiveIndex(index => (index + (event.key === 'ArrowDown' ? 1 : -1) + options.length) % options.length);
+    } else if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      if (open) selectOption(activeIndex);
+      else setOpen(true);
+    } else if (event.key === 'Escape' && open) {
+      event.preventDefault();
+      setOpen(false);
+    } else if (event.key === 'Home' && open) {
+      event.preventDefault();
+      setActiveIndex(0);
+    } else if (event.key === 'End' && open) {
+      event.preventDefault();
+      setActiveIndex(options.length - 1);
+    }
+  };
+
+  return (
+    <div className="admin-choice-field">
+      <span className="admin-choice-label">{label}</span>
+      <div className="admin-choice" ref={rootRef}>
+        <button
+          className={`admin-choice-trigger ${open ? 'is-open' : ''}`}
+          type="button"
+          ref={triggerRef}
+          aria-haspopup="listbox"
+          aria-expanded={open}
+          onClick={() => setOpen(current => !current)}
+          onKeyDown={handleKeyDown}
+        >
+          <span className="admin-choice-icon" aria-hidden="true">{activeOption.icon}</span>
+          <span className="admin-choice-selected">{activeOption.label}</span>
+          <span className={`admin-choice-chevron ${open ? 'is-open' : ''}`} aria-hidden="true">⌄</span>
+        </button>
+        {open && (
+          <div className="admin-choice-menu" role="listbox" aria-label={label}>
+            {options.map((option, index) => (
+              <button
+                key={option.value}
+                className={`admin-choice-option ${option.value === value ? 'is-selected' : ''} ${index === activeIndex ? 'is-active' : ''}`}
+                type="button"
+                role="option"
+                aria-selected={option.value === value}
+                data-option-index={index}
+                onKeyDown={handleKeyDown}
+                onMouseEnter={() => setActiveIndex(index)}
+                onClick={() => selectOption(index)}
+              >
+                <span className="admin-choice-icon" aria-hidden="true">{option.icon}</span>
+                <span className="admin-choice-option-copy"><strong>{option.label}</strong>{option.description && <small>{option.description}</small>}</span>
+                {option.value === value && <span className="admin-choice-check" aria-hidden="true">✓</span>}
+              </button>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 export default function Admin() {
   const [session, setSession] = useState<Session | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
   const [loadingContent, setLoadingContent] = useState(true);
   const [tab, setTab] = useState<Tab>('projects');
+  const [showProjectForm, setShowProjectForm] = useState(false);
+  const [showServiceForm, setShowServiceForm] = useState(false);
+  const [search, setSearch] = useState('');
   const [projects, setProjects] = useState<Project[]>([]);
   const [services, setServices] = useState<Service[]>([]);
   const [copy, setCopy] = useState<SiteCopy>(DEFAULT_SITE_COPY);
@@ -159,6 +306,7 @@ export default function Admin() {
     setProjects(await fetchAdminProjects());
     setProject(emptyProject);
     setEditingProject(false);
+    setShowProjectForm(false);
     setNotice('Proyecto guardado.');
   };
 
@@ -185,6 +333,7 @@ export default function Admin() {
     setServices(await fetchAdminServices());
     setService(emptyService);
     setEditingService(false);
+    setShowServiceForm(false);
     setNotice('Servicio guardado.');
   };
 
@@ -255,7 +404,7 @@ export default function Admin() {
   }
 
   if (checkingSession) {
-    return <main className="admin-page"><p className="admin-loading">Verificando sesión…</p></main>;
+    return <main className="admin-page admin-centered"><p className="admin-loading">Verificando sesión…</p></main>;
   }
 
   if (!session) {
@@ -263,15 +412,17 @@ export default function Admin() {
       <main className="admin-page">
         <form className="admin-panel admin-login" onSubmit={handleLogin}>
           <a className="admin-back" href="/">← Volver al sitio</a>
+          <img className="admin-login-logo" src={logo} alt="Dn Craft & Loop" />
           <p className="admin-eyebrow">Dn Craft &amp; Loop</p>
-          <h1>Administrar contenido</h1>
-          <p>Inicia sesión con la cuenta administradora autorizada.</p>
+          <h1>Tu contenido,<br /><span>bajo control.</span></h1>
+          <p className="admin-login-description">Inicia sesión para actualizar proyectos, servicios y textos de tu sitio.</p>
           <label htmlFor="admin-email">Correo</label>
           <input id="admin-email" type="email" autoComplete="username" value={loginEmail} onChange={event => setLoginEmail(event.target.value)} required />
           <label htmlFor="admin-password">Contraseña</label>
           <input id="admin-password" type="password" autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} required />
           {errorMessage && <p className="admin-error" role="alert">{errorMessage}</p>}
-          <button className="admin-button" type="submit" disabled={busy}>{busy ? 'Verificando…' : 'Iniciar sesión'}</button>
+          <button className="admin-button" type="submit" disabled={busy}>{busy ? 'Verificando…' : <>Iniciar sesión <span aria-hidden="true">→</span></>}</button>
+          <p className="admin-login-footnote">Acceso privado para el equipo de Dn Craft &amp; Loop</p>
         </form>
       </main>
     );
@@ -291,59 +442,137 @@ export default function Admin() {
 
   return (
     <main className="admin-page">
-      <div className="admin-shell">
-        <header className="admin-header">
-          <div><p className="admin-eyebrow">Dn Craft &amp; Loop</p><h1>Panel de contenido</h1><p>Sesión: {session.user.email}</p></div>
-          <div className="admin-header-actions"><a className="admin-link" href="/" target="_blank" rel="noreferrer">Ver sitio ↗</a><button className="admin-button admin-button-secondary" onClick={() => void supabase?.auth.signOut()}>Cerrar sesión</button></div>
-        </header>
-        <nav className="admin-tabs" aria-label="Secciones del panel">
-          <button className={tab === 'projects' ? 'active' : ''} onClick={() => setTab('projects')}>Proyectos</button>
-          <button className={tab === 'services' ? 'active' : ''} onClick={() => setTab('services')}>Servicios</button>
-          <button className={tab === 'copy' ? 'active' : ''} onClick={() => setTab('copy')}>Textos del sitio</button>
-        </nav>
-        {errorMessage && <p className="admin-error admin-alert" role="alert">{errorMessage}</p>}
-        {notice && <p className="admin-success admin-alert" role="status">{notice}</p>}
-        {(busy || loadingContent) && <p className="admin-loading">Guardando o cargando…</p>}
+      <div className="admin-layout">
+        <aside className="admin-sidebar">
+          <a className="admin-brand" href="/" aria-label="Dn Craft & Loop, página principal"><img src={logo} alt="" /></a>
+          <p className="admin-sidebar-label">ADMINISTRACIÓN</p>
+          <nav className="admin-tabs" aria-label="Secciones del panel">
+            <button className={tab === 'projects' ? 'active' : ''} aria-current={tab === 'projects' ? 'page' : undefined} onClick={() => setTab('projects')}><span className="admin-nav-icon" aria-hidden="true">▦</span> Proyectos <span className="admin-nav-count">{projects.length}</span></button>
+            <button className={tab === 'services' ? 'active' : ''} aria-current={tab === 'services' ? 'page' : undefined} onClick={() => setTab('services')}><span className="admin-nav-icon" aria-hidden="true">◇</span> Servicios <span className="admin-nav-count">{services.length}</span></button>
+            <button className={tab === 'copy' ? 'active' : ''} aria-current={tab === 'copy' ? 'page' : undefined} onClick={() => setTab('copy')}><span className="admin-nav-icon" aria-hidden="true">Aa</span> Textos del sitio</button>
+          </nav>
+          <div className="admin-sidebar-bottom">
+            <span className="admin-online-dot" />
+            <span><strong>Conectado</strong><small>{session.user.email}</small></span>
+          </div>
+        </aside>
+
+        <div className="admin-main">
+          <header className="admin-header">
+            <div><p className="admin-eyebrow">ESCRITORIO / {tab === 'projects' ? 'PROYECTOS' : tab === 'services' ? 'SERVICIOS' : 'CONTENIDO'}</p><h1>{tab === 'projects' ? 'Proyectos' : tab === 'services' ? 'Servicios' : 'Textos del sitio'}</h1><p>Gestiona el contenido que se muestra en tu página.</p></div>
+            <div className="admin-header-actions"><a className="admin-link" href="/" target="_blank" rel="noreferrer"><span aria-hidden="true">↗</span> Ver sitio</a><button className="admin-button admin-button-secondary" onClick={() => void supabase?.auth.signOut()}><span aria-hidden="true">↪</span> Cerrar sesión</button></div>
+          </header>
+          {errorMessage && <p className="admin-error admin-alert" role="alert"><span aria-hidden="true">!</span>{errorMessage}</p>}
+          {notice && <p className="admin-success admin-alert" role="status"><span aria-hidden="true">✓</span>{notice}</p>}
+          {(busy || loadingContent) && <p className="admin-loading"><span className="admin-spinner" />{loadingContent ? 'Cargando contenido…' : 'Guardando cambios…'}</p>}
 
         {tab === 'projects' && (
           <section className="admin-section">
-            <div className="admin-section-heading"><div><h2>Proyectos</h2><p>Gestiona las tarjetas que aparecen en la sección Proyectos.</p></div><button className="admin-button" onClick={() => { setProject(emptyProject); setEditingProject(false); setErrorMessage(''); }}>Nuevo proyecto</button></div>
-            <form className="admin-form" onSubmit={saveProject}>
-              <h3>{editingProject ? 'Editar proyecto' : 'Nuevo proyecto'}</h3>
-              <div className="admin-form-grid">
-                <label>Título<input value={project.title} onChange={event => setProject({ ...project, title: event.target.value })} required /></label>
-                <label>Meta / tecnologías<input value={project.meta} onChange={event => setProject({ ...project, meta: event.target.value })} placeholder="E-commerce · React" /></label>
-                <label>Enlace (opcional)<input value={project.href} onChange={event => setProject({ ...project, href: event.target.value })} placeholder="/projects/..." /></label>
-                <label>Orden<input type="number" value={project.sort_order} onChange={event => setProject({ ...project, sort_order: Number(event.target.value) })} /></label>
-                <label>Vista previa<select value={project.preview_kind} onChange={event => setProject({ ...project, preview_kind: event.target.value as Project['preview_kind'] })}><option value="shop">Tienda</option><option value="dashboard">Dashboard</option><option value="app">Aplicación</option></select></label>
-                <label className="admin-checkbox"><input type="checkbox" checked={project.is_published} onChange={event => setProject({ ...project, is_published: event.target.checked })} /> Publicado</label>
-                <label className="admin-wide">Descripción<textarea value={project.description} onChange={event => setProject({ ...project, description: event.target.value })} rows={3} required /></label>
-                <label className="admin-wide">Imagen (opcional)<input type="file" accept="image/*" onChange={event => void uploadImage(event.target.files?.[0])} />{project.image_url && <span className="admin-image-status">Imagen lista para guardar</span>}</label>
+            <div className="admin-summary-grid">
+              <article className="admin-summary-card"><span className="admin-summary-icon">▦</span><div><span>Total de proyectos</span><strong>{projects.length}</strong></div></article>
+              <article className="admin-summary-card"><span className="admin-summary-icon published">✓</span><div><span>Publicados</span><strong>{projects.filter(item => item.is_published).length}</strong></div></article>
+              <article className="admin-summary-card"><span className="admin-summary-icon draft">◷</span><div><span>Borradores</span><strong>{projects.filter(item => !item.is_published).length}</strong></div></article>
+            </div>
+            <div className="admin-section-heading"><div><h2>Todos los proyectos</h2><p>Administra las tarjetas de la sección de proyectos.</p></div><button className="admin-button" onClick={() => { setProject(emptyProject); setEditingProject(false); setShowProjectForm(true); setErrorMessage(''); }}><span aria-hidden="true">＋</span> Nuevo proyecto</button></div>
+            {(showProjectForm || editingProject) && <form className="admin-form" onSubmit={saveProject}>
+              <div className="admin-form-heading"><div><span className="admin-eyebrow">{editingProject ? 'EDITANDO' : 'NUEVO CONTENIDO'}</span><h3>{editingProject ? 'Editar proyecto' : 'Crear proyecto'}</h3></div><button className="admin-close-button" type="button" aria-label="Cerrar formulario" onClick={() => { setProject(emptyProject); setEditingProject(false); setShowProjectForm(false); }}>×</button></div>
+              <div className="admin-editor-layout">
+              <div className="admin-editor-fields">
+                <fieldset className="admin-editor-group">
+                  <legend><span>01</span> Contenido del proyecto</legend>
+                  <p className="admin-editor-hint">La información principal que verá quien visite tu página.</p>
+                  <div className="admin-form-grid">
+                    <label className="admin-wide">Nombre del proyecto<input value={project.title} onChange={event => setProject({ ...project, title: event.target.value })} placeholder="Ej. Diamond Crown" required /></label>
+                    <label className="admin-wide">Categoría y tecnologías<input value={project.meta} onChange={event => setProject({ ...project, meta: event.target.value })} placeholder="E-commerce · React · Firebase" /></label>
+                    <label className="admin-wide">Descripción<textarea value={project.description} onChange={event => setProject({ ...project, description: event.target.value })} rows={4} placeholder="Describe brevemente el proyecto, qué resuelve y para quién." required /></label>
+                  </div>
+                </fieldset>
+                <fieldset className="admin-editor-group">
+                  <legend><span>02</span> Presentación y publicación</legend>
+                  <p className="admin-editor-hint">Personaliza la imagen y dónde aparecerá la tarjeta.</p>
+                  <div className="admin-form-grid">
+                    <ChoiceSelect label="Tipo de proyecto" value={project.preview_kind} options={projectPreviewOptions} onChange={preview_kind => setProject({ ...project, preview_kind })} />
+                    <label>Posición en la página<input type="number" min="0" value={project.sort_order} onChange={event => setProject({ ...project, sort_order: Number(event.target.value) })} /></label>
+                    <label className="admin-wide">Enlace al proyecto <span className="admin-field-hint">Opcional · por ejemplo, /projects/diamond-crown</span><input value={project.href} onChange={event => setProject({ ...project, href: event.target.value })} placeholder="/projects/..." /></label>
+                    <div className="admin-wide admin-upload">
+                      <label htmlFor="project-image">Imagen de portada <span className="admin-field-hint">JPG, PNG o WebP · máximo 5 MB</span></label>
+                      <input id="project-image" type="file" accept="image/*" onChange={event => void uploadImage(event.target.files?.[0])} />
+                      {project.image_url && <span className="admin-image-status">✓ Imagen lista para guardar</span>}
+                    </div>
+                    <label className="admin-publish-toggle"><input type="checkbox" checked={project.is_published} onChange={event => setProject({ ...project, is_published: event.target.checked })} /><span className="admin-toggle-track" aria-hidden="true" /><span><strong>Publicar proyecto</strong><small>{project.is_published ? 'Visible para todas las personas' : 'Solo visible en el panel'}</small></span></label>
+                  </div>
+                </fieldset>
               </div>
-              <div className="admin-form-actions"><button className="admin-button" type="submit" disabled={busy}>{editingProject ? 'Guardar cambios' : 'Crear proyecto'}</button><button className="admin-button admin-button-secondary" type="button" onClick={() => { setProject(emptyProject); setEditingProject(false); }}>Cancelar</button></div>
-            </form>
-            <div className="admin-list">{projects.map(item => <article className="admin-item" key={item.slug}>
-              <div>{item.image_url && <img src={item.image_url} alt="" />}<h3>{item.title}</h3><p>{item.meta} · {item.is_published ? 'Publicado' : 'Borrador'}</p></div>
-              <div className="admin-item-actions"><button onClick={() => { setProject(item); setEditingProject(true); setErrorMessage(''); }}>Editar</button><button className="danger" onClick={() => void deleteRecord('cms_projects', item.slug, item.title)}>Eliminar</button></div>
-            </article>)}</div>
+              <aside className="admin-live-preview" aria-label="Previsualización de la tarjeta del proyecto">
+                <div className="admin-preview-heading"><div><span className="admin-eyebrow">VISTA PREVIA</span><h4>Tarjeta en la página</h4></div><span className={`admin-status ${project.is_published ? 'is-published' : 'is-draft'}`}><i />{project.is_published ? 'Publicado' : 'Borrador'}</span></div>
+                <article className="admin-preview-card">
+                  <div className={`admin-preview-art ${project.preview_kind}`}>
+                    {project.image_url
+                      ? <img src={project.image_url} alt="" />
+                      : <div className="admin-preview-illustration" aria-hidden="true"><span className="preview-window"><i /><i /><i /><b>{project.preview_kind === 'shop' ? '✦' : project.preview_kind === 'dashboard' ? '▥' : '▯'}</b><em /><em /><em /></span></div>}
+                  </div>
+                  <div className="admin-preview-copy">
+                    <span className="admin-preview-meta">{project.meta || 'E-commerce · React · Firebase'}</span>
+                    <h5>{project.title || 'Nombre del proyecto'}</h5>
+                    <p>{project.description || 'Aquí aparecerá una breve descripción de tu proyecto para quienes visiten el sitio.'}</p>
+                  </div>
+                </article>
+                <p className="admin-preview-note">La vista se actualiza mientras editas.</p>
+              </aside>
+              </div>
+              <div className="admin-form-actions"><button className="admin-button" type="submit" disabled={busy}>{editingProject ? 'Guardar cambios' : 'Crear proyecto'} <span aria-hidden="true">→</span></button><button className="admin-button admin-button-secondary" type="button" onClick={() => { setProject(emptyProject); setEditingProject(false); setShowProjectForm(false); }}>Cancelar</button></div>
+            </form>}
+            <div className="admin-list-toolbar"><label className="admin-search"><span aria-hidden="true">⌕</span><input aria-label="Buscar proyectos" placeholder="Buscar proyectos..." value={search} onChange={event => setSearch(event.target.value)} /></label><span>{projects.length} {projects.length === 1 ? 'elemento' : 'elementos'}</span></div>
+            <div className="admin-list">{projects.filter(item => `${item.title} ${item.meta}`.toLowerCase().includes(search.toLowerCase())).map(item => <article className="admin-item" key={item.slug}>
+              <div className="admin-item-info">{item.image_url ? <img src={item.image_url} alt="" /> : <span className={`admin-project-placeholder ${item.preview_kind}`} aria-hidden="true">{item.preview_kind === 'shop' ? '◇' : item.preview_kind === 'dashboard' ? '▥' : '▯'}</span>}<div><h3>{item.title}</h3><p>{item.meta || 'Sin categoría'}</p></div></div>
+              <div className="admin-item-end"><span className={`admin-status ${item.is_published ? 'is-published' : 'is-draft'}`}><i />{item.is_published ? 'Publicado' : 'Borrador'}</span><div className="admin-item-actions"><button onClick={() => { setProject(item); setEditingProject(true); setShowProjectForm(true); setErrorMessage(''); }}>Editar</button><button className="danger" onClick={() => void deleteRecord('cms_projects', item.slug, item.title)}>Eliminar</button></div></div>
+            </article>)}
+              {projects.filter(item => `${item.title} ${item.meta}`.toLowerCase().includes(search.toLowerCase())).length === 0 && <div className="admin-empty"><span aria-hidden="true">⌕</span><h3>No encontramos proyectos</h3><p>Prueba con otra búsqueda o crea un proyecto nuevo.</p></div>}
+            </div>
           </section>
         )}
 
         {tab === 'services' && (
           <section className="admin-section">
-            <div className="admin-section-heading"><div><h2>Servicios</h2><p>Los servicios publicados aparecen en la landing.</p></div><button className="admin-button" onClick={() => { setService(emptyService); setEditingService(false); setErrorMessage(''); }}>Nuevo servicio</button></div>
-            <form className="admin-form" onSubmit={saveService}>
-              <h3>{editingService ? 'Editar servicio' : 'Nuevo servicio'}</h3>
-              <div className="admin-form-grid">
-                <label>Título<input value={service.title} onChange={event => setService({ ...service, title: event.target.value })} required /></label>
-                <label>Icono<select value={service.icon_key} onChange={event => setService({ ...service, icon_key: event.target.value as Service['icon_key'] })}><option value="web">Desarrollo web</option><option value="react">React</option><option value="backend">Backend</option><option value="automation">Automatización</option><option value="design">Diseño</option><option value="support">Soporte</option></select></label>
-                <label>Orden<input type="number" value={service.sort_order} onChange={event => setService({ ...service, sort_order: Number(event.target.value) })} /></label>
-                <label className="admin-checkbox"><input type="checkbox" checked={service.is_published} onChange={event => setService({ ...service, is_published: event.target.checked })} /> Publicado</label>
-                <label className="admin-wide">Descripción<textarea value={service.description} onChange={event => setService({ ...service, description: event.target.value })} rows={3} required /></label>
+            <div className="admin-summary-grid admin-summary-grid-small"><article className="admin-summary-card"><span className="admin-summary-icon">◇</span><div><span>Servicios registrados</span><strong>{services.length}</strong></div></article><article className="admin-summary-card"><span className="admin-summary-icon published">✓</span><div><span>Visibles en el sitio</span><strong>{services.filter(item => item.is_published).length}</strong></div></article></div>
+            <div className="admin-section-heading"><div><h2>Servicios ofrecidos</h2><p>Los servicios publicados aparecen en la landing.</p></div><button className="admin-button" onClick={() => { setService(emptyService); setEditingService(false); setShowServiceForm(true); setErrorMessage(''); }}><span aria-hidden="true">＋</span> Nuevo servicio</button></div>
+            {(showServiceForm || editingService) && <form className="admin-form" onSubmit={saveService}>
+              <div className="admin-form-heading"><div><span className="admin-eyebrow">{editingService ? 'EDITANDO' : 'NUEVO CONTENIDO'}</span><h3>{editingService ? 'Editar servicio' : 'Crear servicio'}</h3></div><button className="admin-close-button" type="button" aria-label="Cerrar formulario" onClick={() => { setService(emptyService); setEditingService(false); setShowServiceForm(false); }}>×</button></div>
+              <div className="admin-editor-layout">
+                <div className="admin-editor-fields">
+                  <fieldset className="admin-editor-group">
+                    <legend><span>01</span> Contenido del servicio</legend>
+                    <p className="admin-editor-hint">Explica con claridad qué ofreces y cómo ayudas a tus clientes.</p>
+                    <div className="admin-form-grid">
+                      <label className="admin-wide">Nombre del servicio<input value={service.title} onChange={event => setService({ ...service, title: event.target.value })} placeholder="Ej. Diseño UI/UX" required /></label>
+                      <label className="admin-wide">Descripción<textarea value={service.description} onChange={event => setService({ ...service, description: event.target.value })} rows={4} placeholder="Describe el valor de este servicio y qué incluye." required /></label>
+                    </div>
+                  </fieldset>
+                  <fieldset className="admin-editor-group">
+                    <legend><span>02</span> Presentación y publicación</legend>
+                    <p className="admin-editor-hint">Elige el icono y el orden en el que aparecerá.</p>
+                    <div className="admin-form-grid">
+                      <ChoiceSelect label="Icono del servicio" value={service.icon_key} options={serviceIconOptions} onChange={icon_key => setService({ ...service, icon_key })} />
+                      <label>Posición en la página<input type="number" min="0" value={service.sort_order} onChange={event => setService({ ...service, sort_order: Number(event.target.value) })} /></label>
+                      <label className="admin-publish-toggle admin-wide"><input type="checkbox" checked={service.is_published} onChange={event => setService({ ...service, is_published: event.target.checked })} /><span className="admin-toggle-track" aria-hidden="true" /><span><strong>Publicar servicio</strong><small>{service.is_published ? 'Visible para todas las personas' : 'Solo visible en el panel'}</small></span></label>
+                    </div>
+                  </fieldset>
+                </div>
+                <aside className="admin-live-preview" aria-label="Previsualización de la tarjeta del servicio">
+                  <div className="admin-preview-heading"><div><span className="admin-eyebrow">VISTA PREVIA</span><h4>Tarjeta en la página</h4></div><span className={`admin-status ${service.is_published ? 'is-published' : 'is-draft'}`}><i />{service.is_published ? 'Publicado' : 'Borrador'}</span></div>
+                  <article className="admin-service-preview-card">
+                    <span className="admin-service-preview-icon"><ServicePreviewIcon icon={service.icon_key} /></span>
+                    <h5>{service.title || 'Nombre del servicio'}</h5>
+                    <p>{service.description || 'Aquí aparecerá una descripción de lo que incluye este servicio y cómo ayuda a tus clientes.'}</p>
+                  </article>
+                  <p className="admin-preview-note">La vista se actualiza mientras editas.</p>
+                </aside>
               </div>
-              <div className="admin-form-actions"><button className="admin-button" type="submit" disabled={busy}>{editingService ? 'Guardar cambios' : 'Crear servicio'}</button><button className="admin-button admin-button-secondary" type="button" onClick={() => { setService(emptyService); setEditingService(false); }}>Cancelar</button></div>
-            </form>
-            <div className="admin-list">{services.map(item => <article className="admin-item" key={item.id}><div><h3>{item.title}</h3><p>{item.is_published ? 'Publicado' : 'Borrador'} · Orden {item.sort_order}</p></div><div className="admin-item-actions"><button onClick={() => { setService(item); setEditingService(true); setErrorMessage(''); }}>Editar</button><button className="danger" onClick={() => void deleteRecord('cms_services', item.id, item.title)}>Eliminar</button></div></article>)}</div>
+              <div className="admin-form-actions"><button className="admin-button" type="submit" disabled={busy}>{editingService ? 'Guardar cambios' : 'Crear servicio'} <span aria-hidden="true">→</span></button><button className="admin-button admin-button-secondary" type="button" onClick={() => { setService(emptyService); setEditingService(false); setShowServiceForm(false); }}>Cancelar</button></div>
+            </form>}
+            <div className="admin-list">{services.map(item => <article className="admin-item" key={item.id}><div className="admin-item-info"><span className="admin-service-icon" aria-hidden="true"><ServicePreviewIcon icon={item.icon_key} /></span><div><h3>{item.title}</h3><p>{item.description}</p></div></div><div className="admin-item-end"><span className={`admin-status ${item.is_published ? 'is-published' : 'is-draft'}`}><i />{item.is_published ? 'Publicado' : 'Borrador'}</span><div className="admin-item-actions"><button onClick={() => { setService(item); setEditingService(true); setShowServiceForm(true); setErrorMessage(''); }}>Editar</button><button className="danger" onClick={() => void deleteRecord('cms_services', item.id, item.title)}>Eliminar</button></div></div></article>)}
+              {services.length === 0 && <div className="admin-empty"><span aria-hidden="true">◇</span><h3>Aún no hay servicios</h3><p>Agrega los servicios que quieres mostrar en tu página.</p></div>}
+            </div>
           </section>
         )}
 
@@ -356,6 +585,7 @@ export default function Admin() {
             </form>
           </section>
         )}
+        </div>
       </div>
     </main>
   );
