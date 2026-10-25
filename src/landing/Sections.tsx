@@ -3,57 +3,45 @@ import type { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { prefersReducedMotion, resetTilt, trackGlow, trackTilt, useOnceInView } from './hooks';
 import { Reveal } from './Reveal';
+import {
+  DEFAULT_PROJECTS,
+  DEFAULT_SERVICES,
+  DEFAULT_SITE_COPY,
+  fetchProjects,
+  fetchServices,
+  fetchSiteCopy,
+  useCmsValue,
+} from '../lib/cms';
+import type { Project, Service } from '../lib/cms';
 
 /* ============ SERVICIOS ============ */
-const services: { title: string; text: string; icon: ReactNode }[] = [
-  {
-    title: 'Desarrollo web a la medida',
-    text: 'Sitios corporativos y plataformas diseñadas para tu negocio, rápidas, seguras y fáciles de escalar.',
-    icon: <><rect x="3" y="4" width="18" height="14" rx="2" /><path d="M3 8h18M8 21h8M12 18v3" /></>,
-  },
-  {
-    title: 'Aplicaciones React / Next.js',
-    text: 'Interfaces modernas con renderizado híbrido, excelente SEO y rendimiento medible en Core Web Vitals.',
-    icon: <><circle cx="12" cy="12" r="2" /><ellipse cx="12" cy="12" rx="10" ry="4" /><ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(60 12 12)" /><ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(120 12 12)" /></>,
-  },
-  {
-    title: 'Backend con Laravel',
-    text: 'APIs robustas, paneles administrativos y lógica de negocio con arquitectura limpia y pruebas.',
-    icon: <><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v6c0 1.700 3.600 3 8 3s8-1.300 8-3V5M4 11v6c0 1.700 3.600 3 8 3s8-1.300 8-3v-6" /></>,
-  },
-  {
-    title: 'Automatización',
-    text: 'Integramos sistemas y eliminamos tareas repetitivas: reportes, correos, facturación y flujos internos.',
-    icon: <path d="M13 2L4 14h7l-1 8 9-12h-7z" />,
-  },
-  {
-    title: 'Diseño UI/UX',
-    text: 'Investigación, prototipos y sistemas de diseño que convierten visitantes en clientes.',
-    icon: <><path d="M12 20h9" /><path d="M16.500 3.500a2.100 2.100 0 013 3L7 19l-4 1 1-4z" /></>,
-  },
-  {
-    title: 'Mantenimiento y despliegue',
-    text: 'Hosting, CI/CD, monitoreo y soporte continuo para que tu sitio nunca se detenga.',
-    icon: <><path d="M12 2a10 10 0 00-3 19.500M12 2c4 3 5 8 3 12l-3 8M8 14l-4 2M15 14l5 2" /><circle cx="12" cy="10" r="2" /></>,
-  },
-];
+const serviceIcons: Record<Service['icon_key'], ReactNode> = {
+  web: <><rect x="3" y="4" width="18" height="14" rx="2" /><path d="M3 8h18M8 21h8M12 18v3" /></>,
+  react: <><circle cx="12" cy="12" r="2" /><ellipse cx="12" cy="12" rx="10" ry="4" /><ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(60 12 12)" /><ellipse cx="12" cy="12" rx="10" ry="4" transform="rotate(120 12 12)" /></>,
+  backend: <><ellipse cx="12" cy="5" rx="8" ry="3" /><path d="M4 5v6c0 1.700 3.600 3 8 3s8-1.300 8-3V5M4 11v6c0 1.700 3.600 3 8 3s8-1.300 8-3v-6" /></>,
+  automation: <path d="M13 2L4 14h7l-1 8 9-12h-7z" />,
+  design: <><path d="M12 20h9" /><path d="M16.500 3.500a2.100 2.100 0 013 3L7 19l-4 1 1-4z" /></>,
+  support: <><path d="M12 2a10 10 0 00-3 19.500M12 2c4 3 5 8 3 12l-3 8M8 14l-4 2M15 14l5 2" /><circle cx="12" cy="10" r="2" /></>,
+};
 
 export function Services() {
+  const services = useCmsValue(fetchServices, DEFAULT_SERVICES);
+  const copy = useCmsValue(fetchSiteCopy, DEFAULT_SITE_COPY);
   return (
     <section id="servicios" aria-labelledby="h-serv">
       <div className="container">
         <div className="section-head">
           <Reveal as="span" className="tag">&lt;Servicios /&gt;</Reveal>
-          <Reveal as="h2" id="h-serv">Todo lo que tu producto digital necesita</Reveal>
-          <Reveal as="p" className="lead">De la idea al servidor en producción: un solo equipo, una sola visión.</Reveal>
+          <Reveal as="h2" id="h-serv">{copy.services_heading}</Reveal>
+          <Reveal as="p" className="lead">{copy.services_subheading}</Reveal>
         </div>
         <div className="cards">
           {services.map((s, i) => (
-            <Reveal key={s.title} delay={(i % 3) * 80}>
+            <Reveal key={s.id} delay={(i % 3) * 80}>
               <article className="card" onPointerMove={trackGlow}>
-                <div className="icon"><svg viewBox="0 0 24 24" aria-hidden="true">{s.icon}</svg></div>
+                <div className="icon"><svg viewBox="0 0 24 24" aria-hidden="true">{serviceIcons[s.icon_key]}</svg></div>
                 <h3>{s.title}</h3>
-                <p>{s.text}</p>
+                <p>{s.description}</p>
               </article>
             </Reveal>
           ))}
@@ -74,14 +62,15 @@ const steps = [
 export function Process() {
   const [revealed, setRevealed] = useState(0);
   const onReveal = useCallback(() => setRevealed(n => Math.min(n + 1, steps.length)), []);
+  const copy = useCmsValue(fetchSiteCopy, DEFAULT_SITE_COPY);
 
   return (
     <section className="process" id="proceso" aria-labelledby="h-proc">
       <div className="container">
         <div className="section-head">
           <Reveal as="span" className="tag">// proceso</Reveal>
-          <Reveal as="h2" id="h-proc">Un loop que mejora en cada vuelta</Reveal>
-          <Reveal as="p" className="lead">Cuatro pasos claros. Cuando el proyecto sale a producción, el ciclo vuelve a empezar con datos reales.</Reveal>
+          <Reveal as="h2" id="h-proc">{copy.process_heading}</Reveal>
+          <Reveal as="p" className="lead">{copy.process_subheading}</Reveal>
         </div>
         <ol className="steps" style={{ '--p': revealed / steps.length } as React.CSSProperties}>
           {steps.map((s, i) => (
@@ -148,29 +137,32 @@ const mockApp = (
   </div>
 );
 
-const projects = [
-  { mock: mockShop, meta: 'E-commerce · React · Firebase', title: 'Diamond Crown', text: 'Tienda, citas en línea y dashboard administrativo para un estudio de tatuajes, piercings y barbería.', to: '/projects/diamond-crown' },
-  { mock: mockDash, meta: 'Dashboard · Laravel', title: 'Panel Logística Norte', text: 'Control de inventario y reportes en tiempo real para operaciones.' },
-  { mock: mockApp, meta: 'Web App · React', title: 'Agenda Pulso', text: 'Reservas y recordatorios automáticos para clínicas y estudios.' },
-];
-
 export function Projects() {
+  const projects = useCmsValue(fetchProjects, DEFAULT_PROJECTS);
+  const copy = useCmsValue(fetchSiteCopy, DEFAULT_SITE_COPY);
+  const previews: Record<Project['preview_kind'], ReactNode> = {
+    shop: mockShop,
+    dashboard: mockDash,
+    app: mockApp,
+  };
   return (
     <section id="proyectos" aria-labelledby="h-proy">
       <div className="container">
         <div className="section-head">
           <Reveal as="span" className="tag">&lt;Proyectos /&gt;</Reveal>
-          <Reveal as="h2" id="h-proy">Trabajo que se nota</Reveal>
-          <Reveal as="p" className="lead">Una muestra del tipo de productos que construimos.</Reveal>
+          <Reveal as="h2" id="h-proy">{copy.projects_heading}</Reveal>
+          <Reveal as="p" className="lead">{copy.projects_subheading}</Reveal>
         </div>
         <div className="projects">
           {projects.map((p, i) => (
-            <Reveal as="article" key={p.title} className="project" delay={i * 120}>
-              <Tilt to={p.to}>
-                {p.mock}
+            <Reveal as="article" key={p.slug} className="project" delay={i * 120}>
+              <Tilt to={p.href || undefined}>
+                {p.image_url
+                  ? <img className="cms-project-image" src={p.image_url} alt="" loading="lazy" />
+                  : previews[p.preview_kind]}
                 <span className="meta">{p.meta}</span>
                 <h3>{p.title}</h3>
-                <p>{p.text}</p>
+                <p>{p.description}</p>
               </Tilt>
             </Reveal>
           ))}
@@ -230,12 +222,13 @@ export function Stats() {
 
 /* ============ CTA FINAL ============ */
 export function FinalCta() {
+  const copy = useCmsValue(fetchSiteCopy, DEFAULT_SITE_COPY);
   return (
     <section style={{ paddingTop: 0 }} aria-labelledby="h-cta">
       <div className="container">
         <Reveal className="cta-box">
-          <h2 id="h-cta">¿Listo para poner tu idea en producción?</h2>
-          <p>Cuéntanos qué necesitas y te respondemos en menos de 24 horas con una propuesta clara.</p>
+          <h2 id="h-cta">{copy.cta_heading}</h2>
+          <p>{copy.cta_description}</p>
           <a href="#contacto" className="btn btn-cta btn-lg" onPointerMove={trackGlow}>
             Hablemos de tu proyecto <span className="arrow" aria-hidden="true">→</span>
           </a>

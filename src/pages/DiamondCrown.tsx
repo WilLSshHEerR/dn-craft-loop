@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useInView } from '../hooks/useInView';
+import logo from '../assets/Logo Dn Craft & Loop.png';
+import smallLogo from '../assets/Logo_small.png';
 import './diamondCrown.css';
 import ProgressBar from '../landing/ProgressBar';
 import { Particles } from '../landing/Hero';
@@ -237,7 +239,10 @@ export default function DiamondCrown() {
           </svg>
           Volver
         </Link>
-        <a href="/" className="dc-logo" aria-label="Dn Craft & Loop"><span className="dc-logo-mark" aria-hidden="true"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><path d="M9 7l-5 5 5 5M15 7l5 5-5 5"/></svg></span><span>Dn Craft <b>&amp;</b> Loop</span></a>
+        <a href="/" className="dc-logo" aria-label="Dn Craft & Loop">
+          <img className="dc-logo-full" src={logo} alt="" />
+          <img className="dc-logo-small" src={smallLogo} alt="" />
+        </a>
         <a href="/#contact" className="btn btn-gold btn-sm">Contrátanos <span className="arrow" aria-hidden="true">→</span></a>
       </nav>
 

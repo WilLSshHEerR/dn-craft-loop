@@ -215,6 +215,7 @@ html{scroll-behavior:smooth;scroll-padding-top:80px}
 .lp .tilt:hover{border-color:var(--cyan-glow);box-shadow:0 30px 60px -25px var(--cyan-glow)}
 .lp .tilt:hover::after{opacity:1}
 .lp .mock{height:200px;border-radius:12px;background:var(--navy-900);border:1px solid var(--line);overflow:hidden;position:relative;transform:translateZ(30px);margin-bottom:1.3rem}
+.lp .cms-project-image{height:200px;margin-bottom:1.3rem;object-fit:cover;border-radius:12px;transform:translateZ(30px)}
 .lp .mock .mbar{height:20px;background:rgba(255,255,255,.05);display:flex;gap:4px;align-items:center;padding-left:8px}
 .lp .mock .mbar i{width:6px;height:6px;border-radius:50%;background:var(--navy-600)}
 .lp .mock .body{padding:12px;display:grid;gap:8px}

@@ -43,6 +43,20 @@ export default defineConfig([
 ])
 ```
 
+## CMS
+
+El panel privado está disponible en `/admin`. Permite administrar proyectos, servicios y los textos principales de la página de inicio. La página de detalle de Diamond Crown y el diseño/animaciones siguen definidos en el código.
+
+### Configuración de Supabase
+
+1. Crea un proyecto de Supabase y configura `VITE_SUPABASE_URL` y `VITE_SUPABASE_ANON_KEY` en `.env.local` (o `.env` local). Usa únicamente la URL del proyecto y la clave publicable; nunca pongas una clave `service_role` en una variable `VITE_`.
+2. En Supabase, abre **SQL Editor**, crea una consulta nueva, copia el contenido de [`supabase/schema.sql`](./supabase/schema.sql) y ejecútala. Esto crea las tablas, los datos iniciales, el bucket de imágenes y las políticas de acceso.
+3. En **Authentication → Users**, agrega el usuario `dncraftloop@gmail.com` y define su contraseña. No habilites ni compartas una cuenta de administrador con otras personas: el panel y las políticas de base de datos solo autorizan ese correo.
+4. Ejecuta `npm run dev` y abre `http://localhost:5173/admin` para iniciar sesión y administrar el contenido.
+5. En Vercel, configura las mismas dos variables en los entornos que uses y vuelve a desplegar después de cualquier cambio.
+
+El archivo `.env` está excluido de Git. La clave publicable se puede usar en el navegador porque las lecturas y escrituras están protegidas por las políticas RLS de Supabase; no cambies esas políticas para hacer que el panel funcione.
+
 You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
 
 ```js

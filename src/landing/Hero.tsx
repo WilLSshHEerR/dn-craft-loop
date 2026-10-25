@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { prefersReducedMotion, trackGlow } from './hooks';
 import { Reveal } from './Reveal';
+import { DEFAULT_SITE_COPY, fetchSiteCopy, useCmsValue } from '../lib/cms';
 
 /* ---------- Snippet del editor: [clase de color, texto] ---------- */
 type Tok = [cls: string, text: string];
@@ -126,17 +127,18 @@ export function Particles({ rgb = '0,212,255' }: { rgb?: string }) {
 }
 
 export default function Hero() {
+  const copy = useCmsValue(fetchSiteCopy, DEFAULT_SITE_COPY);
   return (
     <section className="hero" id="inicio" aria-labelledby="h-hero">
       <Particles />
       <div className="container hero-grid">
         <div>
-          <Reveal as="span" className="tag">&lt;Dn Craft &amp; Loop /&gt;</Reveal>
+          <Reveal as="span" className="tag">{copy.hero_tag}</Reveal>
           <Reveal as="h1" id="h-hero" delay={80}>
-            Ideas que cobran vida, <em>código que no se detiene</em>
+            {copy.hero_title} <em>{copy.hero_emphasis}</em>
           </Reveal>
           <Reveal as="p" className="lead" delay={160}>
-            Diseñamos, desarrollamos y desplegamos sitios y aplicaciones web a la medida. Estrategia clara, código limpio y entregas que funcionan desde el primer día.
+            {copy.hero_description}
           </Reveal>
           <Reveal className="cta-row" delay={240}>
             <a href="#contacto" className="btn btn-cta" onPointerMove={trackGlow}>

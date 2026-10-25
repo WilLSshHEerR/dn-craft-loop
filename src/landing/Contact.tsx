@@ -3,6 +3,7 @@ import type { ChangeEvent, FormEvent } from 'react';
 import { trackGlow } from './hooks';
 import { Reveal } from './Reveal';
 import { Logo } from './Nav';
+import { DEFAULT_SITE_COPY, fetchSiteCopy, useCmsValue } from '../lib/cms';
 
 // Mismos canales de contacto que el resto del sitio
 const WHATSAPP = '5215611233722';
@@ -26,6 +27,7 @@ const fieldMeta: { name: keyof Fields; label: string; placeholder: string; type?
 ];
 
 export function Contact() {
+  const copy = useCmsValue(fetchSiteCopy, DEFAULT_SITE_COPY);
   const [values, setValues] = useState<Fields>({ nombre: '', correo: '', mensaje: '' });
   const [invalid, setInvalid] = useState<Partial<Record<keyof Fields, boolean>>>({});
   const [status, setStatus] = useState('');
@@ -66,8 +68,8 @@ export function Contact() {
       <div className="container contact-grid">
         <div>
           <Reveal as="span" className="tag">{'{ contacto }'}</Reveal>
-          <Reveal as="h2" id="h-cont">Empecemos a construir</Reveal>
-          <Reveal as="p" className="lead">Escríbenos con los detalles de tu proyecto: alcance, plazos y presupuesto aproximado.</Reveal>
+          <Reveal as="h2" id="h-cont">{copy.contact_heading}</Reveal>
+          <Reveal as="p" className="lead">{copy.contact_description}</Reveal>
         </div>
         <Reveal>
         <form className="form" noValidate onSubmit={onSubmit}>

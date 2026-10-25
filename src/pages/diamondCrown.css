@@ -18,10 +18,10 @@
 
 /* Nav glass */
 .dc .dc-nav{top:3px!important;background:rgba(7,7,9,.55)!important;backdrop-filter:blur(14px) saturate(140%)!important;-webkit-backdrop-filter:blur(14px) saturate(140%)!important}
-.dc .dc-logo{display:flex;align-items:center;gap:.6rem;font-family:"Syne",system-ui,sans-serif;font-weight:800;font-size:1.05rem;color:#fff;text-decoration:none}
-.dc .dc-logo-mark{width:34px;height:34px;display:grid;place-items:center;border-radius:9px;background:var(--gold-soft);border:1px solid var(--gold-glow);color:var(--gold)}
-.dc .dc-logo b{color:var(--gold)}
-@media (max-width:560px){.dc .dc-logo span:last-child{display:none}}
+.dc .dc-logo{display:flex;align-items:center;text-decoration:none}
+.dc .dc-logo-full{display:block;width:190px;height:auto;filter:hue-rotate(220deg)}
+.dc .dc-logo-small{display:none;width:34px;height:34px;filter:hue-rotate(220deg)}
+@media (max-width:560px){.dc .dc-logo-full{display:none}.dc .dc-logo-small{display:block}}
 
 /* Hero: cuadrícula blueprint + partículas */
 .dc .dc-grid{position:absolute;inset:0;pointer-events:none;opacity:.5;
