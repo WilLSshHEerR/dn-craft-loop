@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import type { FormEvent, KeyboardEvent, ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import logo from '../assets/Logo Dn Craft & Loop.png';
@@ -13,7 +13,28 @@ import type { Project, Service, SiteCopy } from '../lib/cms';
 import { adminEmail, supabase, supabaseConfigured } from '../lib/supabase';
 import './admin.css';
 
-type Tab = 'projects' | 'services' | 'copy';
+type Tab = 'projects' | 'services' | 'copy' | 'users';
+
+type BusinessRole = {
+  id: string;
+  name: string;
+  description: string;
+};
+
+type BusinessPermission = {
+  id: string;
+  module: string;
+  name: string;
+  description: string;
+};
+
+type BusinessUser = {
+  user_id: string;
+  email: string;
+  display_name: string;
+  is_active: boolean;
+  role_id: string | null;
+};
 
 const copyFields: { key: keyof SiteCopy; label: string; section: string; multiline?: boolean }[] = [
   { key: 'hero_tag', label: 'Etiqueta', section: 'Inicio' },
@@ -101,17 +122,39 @@ const serviceIconOptions: ChoiceOption<Service['icon_key']>[] = [
   { value: 'support', label: 'Soporte', icon: '⌁', description: 'Mantenimiento y despliegue' },
 ];
 
+const individualPermissionOptions: ChoiceOption<'default' | 'allow' | 'deny'>[] = [
+  { value: 'default', label: 'Usar rol', icon: '↔', description: 'Hereda el permiso asignado a su rol' },
+  { value: 'allow', label: 'Permitir', icon: '✓', description: 'Concede este permiso solo a esta persona' },
+  { value: 'deny', label: 'Denegar', icon: '−', description: 'Bloquea este permiso solo a esta persona' },
+];
+
+const permissionModuleNames: Record<string, string> = {
+  cms: 'Sitio web',
+  users: 'Usuarios',
+  clients: 'Clientes',
+  projects: 'Proyectos',
+  contracts: 'Contratos',
+  finance: 'Finanzas',
+  accounting: 'Contabilidad',
+  estimator: 'Estimador',
+};
+
 function ChoiceSelect<T extends string>({
   label,
   value,
   options,
   onChange,
+  className = '',
+  disabled = false,
 }: {
   label: string;
   value: T;
   options: ChoiceOption<T>[];
   onChange: (value: T) => void;
+  className?: string;
+  disabled?: boolean;
 }) {
+  const menuId = useId();
   const [open, setOpen] = useState(false);
   const [activeIndex, setActiveIndex] = useState(() => Math.max(0, options.findIndex(option => option.value === value)));
   const rootRef = useRef<HTMLDivElement>(null);
@@ -168,13 +211,16 @@ function ChoiceSelect<T extends string>({
   };
 
   return (
-    <div className="admin-choice-field">
+    <div className={`admin-choice-field ${className}`}>
       <span className="admin-choice-label">{label}</span>
       <div className="admin-choice" ref={rootRef}>
         <button
           className={`admin-choice-trigger ${open ? 'is-open' : ''}`}
           type="button"
           ref={triggerRef}
+          aria-label={label}
+          disabled={disabled}
+          aria-controls={open ? menuId : undefined}
           aria-haspopup="listbox"
           aria-expanded={open}
           onClick={() => setOpen(current => !current)}
@@ -185,12 +231,13 @@ function ChoiceSelect<T extends string>({
           <span className={`admin-choice-chevron ${open ? 'is-open' : ''}`} aria-hidden="true">⌄</span>
         </button>
         {open && (
-          <div className="admin-choice-menu" role="listbox" aria-label={label}>
+          <div id={menuId} className="admin-choice-menu" role="listbox" aria-label={label}>
             {options.map((option, index) => (
               <button
                 key={option.value}
                 className={`admin-choice-option ${option.value === value ? 'is-selected' : ''} ${index === activeIndex ? 'is-active' : ''}`}
                 type="button"
+                disabled={disabled}
                 role="option"
                 aria-selected={option.value === value}
                 data-option-index={index}
@@ -213,13 +260,22 @@ function ChoiceSelect<T extends string>({
 export default function Admin() {
   const [session, setSession] = useState<Session | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
+  const [hasCmsAccess, setHasCmsAccess] = useState<boolean | null>(null);
+  const [permissionsUserId, setPermissionsUserId] = useState<string | null>(null);
   const [loadingContent, setLoadingContent] = useState(true);
+  const [usersLoaded, setUsersLoaded] = useState(false);
   const [tab, setTab] = useState<Tab>('projects');
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [showServiceForm, setShowServiceForm] = useState(false);
   const [search, setSearch] = useState('');
   const [projects, setProjects] = useState<Project[]>([]);
   const [services, setServices] = useState<Service[]>([]);
+  const [businessUsers, setBusinessUsers] = useState<BusinessUser[]>([]);
+  const [businessRoles, setBusinessRoles] = useState<BusinessRole[]>([]);
+  const [businessPermissions, setBusinessPermissions] = useState<BusinessPermission[]>([]);
+  const [rolePermissions, setRolePermissions] = useState<Record<string, string[]>>({});
+  const [userPermissionOverrides, setUserPermissionOverrides] = useState<Record<string, Record<string, boolean>>>({});
+  const [canManageUsers, setCanManageUsers] = useState(false);
   const [copy, setCopy] = useState<SiteCopy>(DEFAULT_SITE_COPY);
   const [project, setProject] = useState<Project>(emptyProject);
   const [service, setService] = useState<Service>(emptyService);
@@ -250,11 +306,27 @@ export default function Admin() {
   }, []);
 
   useEffect(() => {
-    if (!session) return;
-    if (session.user.email?.toLowerCase() !== adminEmail) return;
+    if (!session || !supabase) return;
+    const client = supabase;
     let active = true;
-    Promise.all([fetchAdminProjects(), fetchAdminServices(), fetchAdminCopy()])
-      .then(([nextProjects, nextServices, nextCopy]) => {
+    Promise.all([
+      client.rpc('has_business_permission', { permission_name: 'cms.manage' }),
+      client.rpc('has_business_permission', { permission_name: 'users.manage' }),
+    ])
+      .then(async ([cmsPermission, usersPermission]) => {
+        if (!active) return;
+        if (cmsPermission?.error) throw cmsPermission.error;
+        if (usersPermission?.error) throw usersPermission.error;
+        const hasAccess = cmsPermission?.data === true;
+        setHasCmsAccess(hasAccess);
+        setPermissionsUserId(session.user.id);
+        setCanManageUsers(usersPermission?.data === true);
+        if (!hasAccess) return;
+        const [nextProjects, nextServices, nextCopy] = await Promise.all([
+          fetchAdminProjects(),
+          fetchAdminServices(),
+          fetchAdminCopy(),
+        ]);
         if (!active) return;
         setProjects(nextProjects);
         setServices(nextServices);
@@ -262,13 +334,67 @@ export default function Admin() {
         setErrorMessage('');
       })
       .catch((error: unknown) => {
-        if (active) setErrorMessage(`No se pudo cargar el contenido: ${getErrorMessage(error)}`);
+        if (active) {
+          setHasCmsAccess(false);
+          setPermissionsUserId(session.user.id);
+          setErrorMessage(`No se pudieron verificar tus permisos o cargar el contenido: ${getErrorMessage(error)}`);
+        }
       })
       .finally(() => {
         if (active) setLoadingContent(false);
       });
     return () => { active = false; };
   }, [session]);
+
+  useEffect(() => {
+    if (!session || tab !== 'users' || !supabase || !hasCmsAccess) return;
+    const client = supabase;
+    let active = true;
+    Promise.resolve(client.rpc('has_business_permission', { permission_name: 'users.manage' }))
+      .then(async ({ data: canManage, error: permissionError }) => {
+        if (permissionError) throw permissionError;
+        if (!active) return;
+        setCanManageUsers(canManage === true);
+        if (!canManage) return;
+        const [profilesResult, userRolesResult, rolesResult, permissionsResult, rolePermissionsResult, userPermissionsResult] = await Promise.all([
+          client.from('business_profiles').select('user_id,email,display_name,is_active').order('email'),
+          client.from('business_user_roles').select('user_id,role_id'),
+          client.from('business_roles').select('id,name,description').order('name'),
+          client.from('business_permissions').select('id,module,name,description').order('module').order('name'),
+          client.from('business_role_permissions').select('role_id,permission_id'),
+          client.from('business_user_permissions').select('user_id,permission_id,allowed'),
+        ]);
+        if (profilesResult.error) throw profilesResult.error;
+        if (userRolesResult.error) throw userRolesResult.error;
+        if (rolesResult.error) throw rolesResult.error;
+        if (permissionsResult.error) throw permissionsResult.error;
+        if (rolePermissionsResult.error) throw rolePermissionsResult.error;
+        if (userPermissionsResult.error) throw userPermissionsResult.error;
+        if (!active) return;
+        const assignedRoles = new Map((userRolesResult.data ?? []).map(row => [row.user_id, row.role_id]));
+        setBusinessUsers((profilesResult.data ?? []).map(profile => ({
+          ...profile,
+          role_id: assignedRoles.get(profile.user_id) ?? null,
+        })));
+        setBusinessRoles(rolesResult.data ?? []);
+        setBusinessPermissions(permissionsResult.data ?? []);
+        setRolePermissions((rolePermissionsResult.data ?? []).reduce<Record<string, string[]>>((map, item) => {
+          map[item.role_id] = [...(map[item.role_id] ?? []), item.permission_id];
+          return map;
+        }, {}));
+        setUserPermissionOverrides((userPermissionsResult.data ?? []).reduce<Record<string, Record<string, boolean>>>((map, item) => {
+          map[item.user_id] = { ...(map[item.user_id] ?? {}), [item.permission_id]: item.allowed };
+          return map;
+        }, {}));
+      })
+      .catch((error: unknown) => {
+        if (active) setErrorMessage(`No se pudieron cargar los usuarios: ${getErrorMessage(error)}`);
+      })
+      .finally(() => {
+        if (active) setUsersLoaded(true);
+      });
+    return () => { active = false; };
+  }, [session, tab, hasCmsAccess]);
 
   const handleLogin = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -281,6 +407,72 @@ export default function Admin() {
     });
     setBusy(false);
     if (error) setErrorMessage(`No se pudo iniciar sesión: ${error.message}`);
+  };
+
+  const assignBusinessRole = async (userId: string, roleId: string) => {
+    if (!supabase || !session || !canManageUsers) return;
+    setBusy(true);
+    setErrorMessage('');
+    setNotice('');
+    const { error } = await supabase
+      .from('business_user_roles')
+      .upsert({ user_id: userId, role_id: roleId, assigned_by: session.user.id }, { onConflict: 'user_id' });
+    setBusy(false);
+    if (error) {
+      setErrorMessage(`No se pudo asignar el rol: ${error.message}`);
+      return;
+    }
+    setBusinessUsers(users => users.map(user => user.user_id === userId ? { ...user, role_id: roleId } : user));
+    setNotice('Rol asignado correctamente.');
+  };
+
+  const updateRolePermission = async (roleId: string, permissionId: string, allowed: boolean) => {
+    if (!supabase || !canManageUsers || roleId === 'owner') return;
+    setBusy(true);
+    setErrorMessage('');
+    setNotice('');
+    const result = allowed
+      ? await supabase.from('business_role_permissions').insert({ role_id: roleId, permission_id: permissionId })
+      : await supabase.from('business_role_permissions').delete().eq('role_id', roleId).eq('permission_id', permissionId);
+    setBusy(false);
+    if (result.error) {
+      setErrorMessage(`No se pudo actualizar el permiso: ${result.error.message}`);
+      return;
+    }
+    setRolePermissions(current => ({
+      ...current,
+      [roleId]: allowed
+        ? [...(current[roleId] ?? []), permissionId]
+        : (current[roleId] ?? []).filter(id => id !== permissionId),
+    }));
+    setNotice('Permisos del rol actualizados.');
+  };
+
+  const updateUserPermission = async (userId: string, permissionId: string, value: string) => {
+    if (!supabase || !canManageUsers) return;
+    setBusy(true);
+    setErrorMessage('');
+    setNotice('');
+    const result = value === 'default'
+      ? await supabase.from('business_user_permissions').delete().eq('user_id', userId).eq('permission_id', permissionId)
+      : await supabase.from('business_user_permissions').upsert({
+        user_id: userId,
+        permission_id: permissionId,
+        allowed: value === 'allow',
+        assigned_by: session?.user.id,
+      }, { onConflict: 'user_id,permission_id' });
+    setBusy(false);
+    if (result.error) {
+      setErrorMessage(`No se pudo actualizar el permiso individual: ${result.error.message}`);
+      return;
+    }
+    setUserPermissionOverrides(current => {
+      const userOverrides = { ...(current[userId] ?? {}) };
+      if (value === 'default') delete userOverrides[permissionId];
+      else userOverrides[permissionId] = value === 'allow';
+      return { ...current, [userId]: userOverrides };
+    });
+    setNotice('Permiso individual actualizado.');
   };
 
   const saveProject = async (event: FormEvent<HTMLFormElement>) => {
@@ -428,12 +620,17 @@ export default function Admin() {
     );
   }
 
-  if (session.user.email?.toLowerCase() !== adminEmail) {
+  if (permissionsUserId !== session.user.id) {
+    return <main className="admin-page admin-centered"><p className="admin-loading">Verificando permisos…</p></main>;
+  }
+
+  if (!hasCmsAccess) {
     return (
       <main className="admin-page">
         <section className="admin-panel">
           <h1>Acceso no autorizado</h1>
-          <p>Esta cuenta no tiene permiso para administrar el sitio. El CMS está limitado a {adminEmail}.</p>
+          <p>Esta cuenta no tiene asignado un rol con permiso para administrar el sitio.</p>
+          {errorMessage && <p className="admin-error" role="alert">{errorMessage}</p>}
           <button className="admin-button" onClick={() => void supabase?.auth.signOut()}>Cerrar sesión</button>
         </section>
       </main>
@@ -450,6 +647,7 @@ export default function Admin() {
             <button className={tab === 'projects' ? 'active' : ''} aria-current={tab === 'projects' ? 'page' : undefined} onClick={() => setTab('projects')}><span className="admin-nav-icon" aria-hidden="true">▦</span> Proyectos <span className="admin-nav-count">{projects.length}</span></button>
             <button className={tab === 'services' ? 'active' : ''} aria-current={tab === 'services' ? 'page' : undefined} onClick={() => setTab('services')}><span className="admin-nav-icon" aria-hidden="true">◇</span> Servicios <span className="admin-nav-count">{services.length}</span></button>
             <button className={tab === 'copy' ? 'active' : ''} aria-current={tab === 'copy' ? 'page' : undefined} onClick={() => setTab('copy')}><span className="admin-nav-icon" aria-hidden="true">Aa</span> Textos del sitio</button>
+            {canManageUsers && <button className={tab === 'users' ? 'active' : ''} aria-current={tab === 'users' ? 'page' : undefined} onClick={() => setTab('users')}><span className="admin-nav-icon" aria-hidden="true">♙</span> Usuarios y roles</button>}
           </nav>
           <div className="admin-sidebar-bottom">
             <span className="admin-online-dot" />
@@ -459,7 +657,7 @@ export default function Admin() {
 
         <div className="admin-main">
           <header className="admin-header">
-            <div><p className="admin-eyebrow">ESCRITORIO / {tab === 'projects' ? 'PROYECTOS' : tab === 'services' ? 'SERVICIOS' : 'CONTENIDO'}</p><h1>{tab === 'projects' ? 'Proyectos' : tab === 'services' ? 'Servicios' : 'Textos del sitio'}</h1><p>Gestiona el contenido que se muestra en tu página.</p></div>
+            <div><p className="admin-eyebrow">ESCRITORIO / {tab === 'projects' ? 'PROYECTOS' : tab === 'services' ? 'SERVICIOS' : tab === 'copy' ? 'CONTENIDO' : 'USUARIOS'}</p><h1>{tab === 'projects' ? 'Proyectos' : tab === 'services' ? 'Servicios' : tab === 'copy' ? 'Textos del sitio' : 'Usuarios y roles'}</h1><p>{tab === 'users' ? 'Asigna a cada persona el nivel de acceso que necesita.' : 'Gestiona el contenido que se muestra en tu página.'}</p></div>
             <div className="admin-header-actions"><a className="admin-link" href="/" target="_blank" rel="noreferrer"><span aria-hidden="true">↗</span> Ver sitio</a><button className="admin-button admin-button-secondary" onClick={() => void supabase?.auth.signOut()}><span aria-hidden="true">↪</span> Cerrar sesión</button></div>
           </header>
           {errorMessage && <p className="admin-error admin-alert" role="alert"><span aria-hidden="true">!</span>{errorMessage}</p>}
@@ -573,6 +771,107 @@ export default function Admin() {
             <div className="admin-list">{services.map(item => <article className="admin-item" key={item.id}><div className="admin-item-info"><span className="admin-service-icon" aria-hidden="true"><ServicePreviewIcon icon={item.icon_key} /></span><div><h3>{item.title}</h3><p>{item.description}</p></div></div><div className="admin-item-end"><span className={`admin-status ${item.is_published ? 'is-published' : 'is-draft'}`}><i />{item.is_published ? 'Publicado' : 'Borrador'}</span><div className="admin-item-actions"><button onClick={() => { setService(item); setEditingService(true); setShowServiceForm(true); setErrorMessage(''); }}>Editar</button><button className="danger" onClick={() => void deleteRecord('cms_services', item.id, item.title)}>Eliminar</button></div></div></article>)}
               {services.length === 0 && <div className="admin-empty"><span aria-hidden="true">◇</span><h3>Aún no hay servicios</h3><p>Agrega los servicios que quieres mostrar en tu página.</p></div>}
             </div>
+          </section>
+        )}
+
+        {tab === 'users' && (
+          <section className="admin-section">
+            {!canManageUsers ? (
+              <div className="admin-empty"><span aria-hidden="true">♙</span><h3>Acceso restringido</h3><p>Tu rol no tiene permiso para administrar usuarios.</p></div>
+            ) : (
+              <>
+                <div className="admin-summary-grid admin-summary-grid-small">
+                  <article className="admin-summary-card"><span className="admin-summary-icon">♙</span><div><span>Usuarios registrados</span><strong>{businessUsers.length}</strong></div></article>
+                  <article className="admin-summary-card"><span className="admin-summary-icon published">◇</span><div><span>Roles disponibles</span><strong>{businessRoles.length}</strong></div></article>
+                </div>
+                <div className="admin-section-heading"><div><h2>Equipo y accesos</h2><p>Cada persona ve únicamente las áreas permitidas por su rol.</p></div></div>
+                <p className="admin-info-note">Para invitar a alguien, crea primero su cuenta en Supabase: Authentication → Users → Invite user. Después de aceptar la invitación e iniciar sesión, aparecerá aquí para asignarle un rol.</p>
+                <div className="admin-list">
+                  {businessUsers.map(user => {
+                    const role = businessRoles.find(item => item.id === user.role_id);
+                    return (
+                      <article className="admin-item admin-user-item" key={user.user_id}>
+                        <div className="admin-item-info">
+                          <span className="admin-user-avatar" aria-hidden="true">{(user.display_name || user.email).slice(0, 1).toUpperCase()}</span>
+                          <div><h3>{user.display_name || user.email}</h3><p>{user.display_name ? user.email : role?.description ?? 'Cuenta sin rol asignado.'}</p></div>
+                        </div>
+                        <div className="admin-user-role">
+                          <span className={`admin-status ${user.is_active ? 'is-published' : 'is-draft'}`}><i />{user.is_active ? 'Activo' : 'Desactivado'}</span>
+                          {user.role_id && <ChoiceSelect
+                            className="admin-choice-user-role"
+                            label="Rol asignado"
+                            value={user.role_id}
+                            options={businessRoles.map(item => ({
+                              value: item.id,
+                              label: item.name,
+                              icon: item.id === 'owner' ? '♛' : '♙',
+                              description: item.description,
+                            }))}
+                            onChange={roleId => void assignBusinessRole(user.user_id, roleId)}
+                            disabled={busy || !user.is_active}
+                          />}
+                        </div>
+                        {user.role_id !== 'owner' && (
+                          <details className="admin-user-permissions">
+                            <summary>Permisos individuales de esta persona</summary>
+                            <div className="admin-user-permission-grid">
+                              {businessPermissions.map(permission => {
+                                const override = userPermissionOverrides[user.user_id]?.[permission.id];
+                                const inherited = (rolePermissions[user.role_id ?? ''] ?? []).includes(permission.id);
+                                return (
+                                  <div className="admin-user-permission-option" key={permission.id}>
+                                    <span><strong>{permission.name}</strong><small>Por rol: {inherited ? 'permitido' : 'sin acceso'}</small></span>
+                                    <ChoiceSelect
+                                      className="admin-choice-permission"
+                                      label={`${permission.name} para ${user.email}`}
+                                      value={override === undefined ? 'default' : override ? 'allow' : 'deny'}
+                                      options={individualPermissionOptions}
+                                      disabled={busy || !user.is_active}
+                                      onChange={value => void updateUserPermission(user.user_id, permission.id, value)}
+                                    />
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </details>
+                        )}
+                      </article>
+                    );
+                  })}
+                  {businessUsers.length === 0 && usersLoaded && <div className="admin-empty"><span aria-hidden="true">♙</span><h3>Aún no hay usuarios</h3><p>Invita a las personas desde Supabase Authentication y después asígnales un rol aquí.</p></div>}
+                </div>
+                <div className="admin-role-access">
+                  <div className="admin-section-heading"><div><h2>Permisos por rol</h2><p>Ajusta qué módulos puede utilizar cada rol. Los cambios aplican a todas las personas con ese rol.</p></div></div>
+                  <div className="admin-role-grid">
+                    {businessRoles.map(role => (
+                      <article className="admin-role-card" key={role.id}>
+                        <div className="admin-role-card-heading"><h3>{role.name}</h3><p>{role.description}</p></div>
+                        {role.id === 'owner' ? (
+                          <p className="admin-owner-lock">Acceso total permanente. Este rol no se puede restringir.</p>
+                        ) : (
+                          [...new Set(businessPermissions.map(permission => permission.module))].map(module => (
+                            <fieldset className="admin-permission-group" key={module}>
+                              <legend>{permissionModuleNames[module] ?? module}</legend>
+                              {businessPermissions.filter(permission => permission.module === module).map(permission => (
+                                <label className="admin-permission-option" key={permission.id}>
+                                  <input
+                                    type="checkbox"
+                                    checked={(rolePermissions[role.id] ?? []).includes(permission.id)}
+                                    disabled={busy}
+                                    onChange={event => void updateRolePermission(role.id, permission.id, event.target.checked)}
+                                  />
+                                  <span><strong>{permission.name}</strong><small>{permission.description}</small></span>
+                                </label>
+                              ))}
+                            </fieldset>
+                          ))
+                        )}
+                      </article>
+                    ))}
+                  </div>
+                </div>
+              </>
+            )}
           </section>
         )}
 
