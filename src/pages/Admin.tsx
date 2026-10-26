@@ -13,12 +13,18 @@ import type { Project, Service, SiteCopy } from '../lib/cms';
 import { adminEmail, supabase, supabaseConfigured } from '../lib/supabase';
 import './admin.css';
 
-type Tab = 'projects' | 'services' | 'copy' | 'users';
+type Tab = 'projects' | 'services' | 'copy' | 'users' | 'profile';
 
 type BusinessRole = {
   id: string;
   name: string;
   description: string;
+};
+
+type CurrentAccess = {
+  role: BusinessRole | null;
+  modules: string[];
+  isActive: boolean;
 };
 
 type BusinessPermission = {
@@ -35,6 +41,17 @@ type BusinessUser = {
   is_active: boolean;
   role_id: string | null;
 };
+
+type BusinessProfile = {
+  email: string;
+  display_name: string;
+  is_active: boolean;
+  requires_email_verification: boolean;
+  email_verification_deadline: string | null;
+  email_verified_at: string | null;
+};
+
+type InviteDelivery = 'email' | 'temporary_password';
 
 const copyFields: { key: keyof SiteCopy; label: string; section: string; multiline?: boolean }[] = [
   { key: 'hero_tag', label: 'Etiqueta', section: 'Inicio' },
@@ -88,6 +105,20 @@ function getErrorMessage(error: unknown) {
   return error instanceof Error ? error.message : 'Ocurrió un error inesperado.';
 }
 
+async function getFunctionErrorMessage(error: Error) {
+  if ('context' in error && error.context instanceof Response) {
+    try {
+      const body: unknown = await error.context.clone().json();
+      if (typeof body === 'object' && body !== null && 'error' in body && typeof body.error === 'string') {
+        return body.error;
+      }
+    } catch {
+      return error.message;
+    }
+  }
+  return error.message;
+}
+
 function ServicePreviewIcon({ icon }: { icon: Service['icon_key'] }) {
   const shapes: Record<Service['icon_key'], ReactNode> = {
     web: <><rect x="3" y="4" width="18" height="14" rx="2" /><path d="M3 8h18M8 21h8M12 18v3" /></>,
@@ -128,6 +159,25 @@ const individualPermissionOptions: ChoiceOption<'default' | 'allow' | 'deny'>[] 
   { value: 'deny', label: 'Denegar', icon: '−', description: 'Bloquea este permiso solo a esta persona' },
 ];
 
+const unassignedRoleOption: ChoiceOption<string> = {
+  value: 'unassigned',
+  label: 'Selecciona un rol',
+  icon: '♙',
+  description: 'Define el acceso inicial de esta persona',
+};
+
+const inviteDeliveryOptions: ChoiceOption<InviteDelivery>[] = [
+  { value: 'email', label: 'Invitación por correo', icon: '✉', description: 'La persona recibe un enlace de acceso' },
+  { value: 'temporary_password', label: 'Contraseña temporal', icon: '⌑', description: 'Solo para integrantes internos de confianza' },
+];
+
+const temporaryPasswordRoleIds = new Set([
+  'operations_admin',
+  'project_manager',
+  'finance',
+  'collaborator',
+]);
+
 const permissionModuleNames: Record<string, string> = {
   cms: 'Sitio web',
   users: 'Usuarios',
@@ -137,6 +187,17 @@ const permissionModuleNames: Record<string, string> = {
   finance: 'Finanzas',
   accounting: 'Contabilidad',
   estimator: 'Estimador',
+};
+
+const accessModuleDescriptions: Record<string, string> = {
+  cms: 'Edición de proyectos públicos, servicios y textos del sitio.',
+  users: 'Invitaciones, asignación de roles y permisos.',
+  clients: 'Información de clientes autorizados.',
+  projects: 'Proyectos, tareas y avances autorizados.',
+  contracts: 'Contratos asociados a los proyectos permitidos.',
+  finance: 'Costos, presupuestos y pagos según el alcance asignado.',
+  accounting: 'Informes y registros contables.',
+  estimator: 'Configuración de la herramienta pública de estimaciones.',
 };
 
 function ChoiceSelect<T extends string>({
@@ -257,16 +318,77 @@ function ChoiceSelect<T extends string>({
   );
 }
 
+function ProfileView({
+  profile,
+  roleLabel,
+  name,
+  busy,
+  onNameChange,
+  onSubmit,
+  onResendVerification,
+}: {
+  profile: BusinessProfile;
+  roleLabel: string;
+  name: string;
+  busy: boolean;
+  onNameChange: (value: string) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+  onResendVerification: () => void;
+}) {
+  const verificationDeadline = profile.email_verification_deadline
+    ? new Date(profile.email_verification_deadline).toLocaleDateString('es-MX', {
+      day: 'numeric',
+      month: 'long',
+      year: 'numeric',
+    })
+    : null;
+  return (
+    <section className="admin-profile-card">
+      <div className="admin-profile-heading">
+        <span className="admin-user-avatar" aria-hidden="true">{(profile.display_name || profile.email).slice(0, 1).toUpperCase()}</span>
+        <div><span className="admin-eyebrow">MI CUENTA</span><h2>Perfil personal</h2><p>Consulta y actualiza tu información de acceso.</p></div>
+      </div>
+      <form className="admin-profile-form" onSubmit={onSubmit}>
+        <label>Nombre<input value={name} onChange={event => onNameChange(event.target.value)} maxLength={100} autoComplete="name" required /></label>
+        <label>Correo electrónico<input value={profile.email} readOnly /></label>
+        <div className="admin-profile-meta">
+          <span>Rol<strong>{roleLabel}</strong></span>
+          <span>Estado<strong className={profile.is_active ? 'is-active' : 'is-inactive'}>{profile.is_active ? 'Activo' : 'Desactivado'}</strong></span>
+          <span>Correo<strong className={profile.email_verified_at ? 'is-active' : 'is-inactive'}>{profile.email_verified_at ? 'Verificado' : 'Pendiente de verificación'}</strong></span>
+        </div>
+        {profile.requires_email_verification && verificationDeadline && !profile.email_verified_at && (
+          <>
+            <p className="admin-warning-note">Verifica tu correo antes del {verificationDeadline}. Si vence el plazo, el acceso a las áreas protegidas quedará bloqueado hasta verificar la cuenta.</p>
+            <button className="admin-button admin-button-secondary" type="button" disabled={busy} onClick={onResendVerification}>Enviar enlace de verificación</button>
+          </>
+        )}
+        <button className="admin-button" type="submit" disabled={busy}>{busy ? 'Guardando…' : 'Guardar perfil'}</button>
+      </form>
+    </section>
+  );
+}
+
 export default function Admin() {
   const [session, setSession] = useState<Session | null>(null);
   const [checkingSession, setCheckingSession] = useState(true);
   const [hasCmsAccess, setHasCmsAccess] = useState<boolean | null>(null);
   const [permissionsUserId, setPermissionsUserId] = useState<string | null>(null);
+  const [mustChangePassword, setMustChangePassword] = useState<boolean | null>(null);
+  const [myProfile, setMyProfile] = useState<BusinessProfile | null>(null);
+  const [expiredVerificationDeadline, setExpiredVerificationDeadline] = useState<string | null>(null);
+  const [profileName, setProfileName] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmNewPassword, setConfirmNewPassword] = useState('');
+  const [inviteDelivery, setInviteDelivery] = useState<InviteDelivery>('email');
+  const [temporaryCredentials, setTemporaryCredentials] = useState<{ email: string; password: string } | null>(null);
+  const [currentAccess, setCurrentAccess] = useState<CurrentAccess | null>(null);
+  const [accessDetailsError, setAccessDetailsError] = useState('');
   const [loadingContent, setLoadingContent] = useState(true);
   const [usersLoaded, setUsersLoaded] = useState(false);
   const [tab, setTab] = useState<Tab>('projects');
   const [showProjectForm, setShowProjectForm] = useState(false);
   const [showServiceForm, setShowServiceForm] = useState(false);
+  const [showUserForm, setShowUserForm] = useState(false);
   const [search, setSearch] = useState('');
   const [projects, setProjects] = useState<Project[]>([]);
   const [services, setServices] = useState<Service[]>([]);
@@ -275,6 +397,9 @@ export default function Admin() {
   const [businessPermissions, setBusinessPermissions] = useState<BusinessPermission[]>([]);
   const [rolePermissions, setRolePermissions] = useState<Record<string, string[]>>({});
   const [userPermissionOverrides, setUserPermissionOverrides] = useState<Record<string, Record<string, boolean>>>({});
+  const [newUserName, setNewUserName] = useState('');
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserRole, setNewUserRole] = useState('unassigned');
   const [canManageUsers, setCanManageUsers] = useState(false);
   const [copy, setCopy] = useState<SiteCopy>(DEFAULT_SITE_COPY);
   const [project, setProject] = useState<Project>(emptyProject);
@@ -306,20 +431,39 @@ export default function Admin() {
   }, []);
 
   useEffect(() => {
+    if (!myProfile?.requires_email_verification || myProfile.email_verified_at || !myProfile.email_verification_deadline) {
+      return;
+    }
+    const remaining = Date.parse(myProfile.email_verification_deadline) - Date.now();
+    const deadline = myProfile.email_verification_deadline;
+    const timeout = window.setTimeout(() => setExpiredVerificationDeadline(deadline), Math.max(0, remaining));
+    return () => window.clearTimeout(timeout);
+  }, [myProfile]);
+
+  useEffect(() => {
     if (!session || !supabase) return;
     const client = supabase;
     let active = true;
     Promise.all([
       client.rpc('has_business_permission', { permission_name: 'cms.manage' }),
       client.rpc('has_business_permission', { permission_name: 'users.manage' }),
+      client.from('business_profiles')
+        .select('email,display_name,is_active,must_change_password,requires_email_verification,email_verification_deadline,email_verified_at')
+        .eq('user_id', session.user.id)
+        .maybeSingle(),
     ])
-      .then(async ([cmsPermission, usersPermission]) => {
+      .then(async ([cmsPermission, usersPermission, profileResult]) => {
         if (!active) return;
         if (cmsPermission?.error) throw cmsPermission.error;
         if (usersPermission?.error) throw usersPermission.error;
+        if (profileResult.error) throw profileResult.error;
+        if (!profileResult.data) throw new Error('No se encontró el perfil de acceso de esta cuenta.');
         const hasAccess = cmsPermission?.data === true;
         setHasCmsAccess(hasAccess);
         setPermissionsUserId(session.user.id);
+        setMustChangePassword(profileResult.data.must_change_password);
+        setMyProfile(profileResult.data);
+        setProfileName(profileResult.data.display_name);
         setCanManageUsers(usersPermission?.data === true);
         if (!hasAccess) return;
         const [nextProjects, nextServices, nextCopy] = await Promise.all([
@@ -345,6 +489,57 @@ export default function Admin() {
       });
     return () => { active = false; };
   }, [session]);
+
+  useEffect(() => {
+    if (!session || !supabase || permissionsUserId !== session.user.id || hasCmsAccess !== false) return;
+    const client = supabase;
+    let active = true;
+    const loadAssignedAccess = async () => {
+      const [profileResult, userRoleResult, permissionsResult, overridesResult] = await Promise.all([
+        client.from('business_profiles').select('is_active').eq('user_id', session.user.id).maybeSingle(),
+        client.from('business_user_roles').select('role_id').eq('user_id', session.user.id).maybeSingle(),
+        client.from('business_permissions').select('id,module,name,description'),
+        client.from('business_user_permissions').select('permission_id,allowed').eq('user_id', session.user.id),
+      ]);
+      if (profileResult.error) throw profileResult.error;
+      if (userRoleResult.error) throw userRoleResult.error;
+      if (permissionsResult.error) throw permissionsResult.error;
+      if (overridesResult.error) throw overridesResult.error;
+
+      const roleId = userRoleResult.data?.role_id;
+      const [roleResult, rolePermissionsResult] = roleId
+        ? await Promise.all([
+          client.from('business_roles').select('id,name,description').eq('id', roleId).maybeSingle(),
+          client.from('business_role_permissions').select('permission_id').eq('role_id', roleId),
+        ])
+        : [null, null];
+      if (roleResult?.error) throw roleResult.error;
+      if (rolePermissionsResult?.error) throw rolePermissionsResult.error;
+
+      const granted = new Set((rolePermissionsResult?.data ?? []).map(item => item.permission_id));
+      for (const override of overridesResult.data ?? []) {
+        if (override.allowed) granted.add(override.permission_id);
+        else granted.delete(override.permission_id);
+      }
+      const modules = [...new Set(
+        (permissionsResult.data ?? [])
+          .filter(permission => granted.has(permission.id))
+          .map(permission => permission.module),
+      )];
+      if (active) {
+        setCurrentAccess({
+          role: roleResult?.data ?? null,
+          modules,
+          isActive: profileResult.data?.is_active ?? false,
+        });
+        setAccessDetailsError('');
+      }
+    };
+    loadAssignedAccess().catch((error: unknown) => {
+      if (active) setAccessDetailsError(getErrorMessage(error));
+    });
+    return () => { active = false; };
+  }, [session, permissionsUserId, hasCmsAccess]);
 
   useEffect(() => {
     if (!session || tab !== 'users' || !supabase || !hasCmsAccess) return;
@@ -406,7 +601,53 @@ export default function Admin() {
       password,
     });
     setBusy(false);
-    if (error) setErrorMessage(`No se pudo iniciar sesión: ${error.message}`);
+    if (error) {
+      setErrorMessage(`No se pudo iniciar sesión: ${error.message}`);
+    }
+  };
+
+  const resendVerificationEmail = async (email = loginEmail.trim()) => {
+    if (!supabase) return;
+    const normalizedEmail = email.trim().toLowerCase();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalizedEmail)) {
+      setErrorMessage('Escribe un correo válido para solicitar el enlace de verificación.');
+      return;
+    }
+    setBusy(true);
+    setErrorMessage('');
+    setNotice('');
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email: normalizedEmail,
+      options: { emailRedirectTo: `${window.location.origin}/admin` },
+    });
+    setBusy(false);
+    if (error) {
+      setErrorMessage(`No se pudo reenviar la verificación: ${error.message}. Confirma que SMTP esté configurado en Supabase.`);
+      return;
+    }
+    setNotice(`Si la cuenta aún necesita verificación, enviaremos un enlace a ${normalizedEmail}. Revisa también la carpeta de spam.`);
+  };
+
+  const saveMyProfile = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!supabase || !session || !myProfile) return;
+    const normalizedName = profileName.trim();
+    if (normalizedName.length < 1 || normalizedName.length > 100) {
+      setErrorMessage('El nombre debe tener entre 1 y 100 caracteres.');
+      return;
+    }
+    setBusy(true);
+    setErrorMessage('');
+    setNotice('');
+    const { error } = await supabase.auth.updateUser({ data: { full_name: normalizedName } });
+    setBusy(false);
+    if (error) {
+      setErrorMessage(`No se pudo actualizar el perfil: ${error.message}`);
+      return;
+    }
+    setMyProfile({ ...myProfile, display_name: normalizedName });
+    setNotice('Tu perfil se actualizó correctamente.');
   };
 
   const assignBusinessRole = async (userId: string, roleId: string) => {
@@ -473,6 +714,115 @@ export default function Admin() {
       return { ...current, [userId]: userOverrides };
     });
     setNotice('Permiso individual actualizado.');
+  };
+
+  const inviteBusinessUser = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!supabase || !session || !canManageUsers) return;
+    if (newUserRole === 'unassigned' || newUserRole === 'owner') {
+      setErrorMessage('Selecciona un rol válido para la persona invitada.');
+      return;
+    }
+    if (inviteDelivery === 'temporary_password' && !temporaryPasswordRoleIds.has(newUserRole)) {
+      setErrorMessage('La contraseña temporal solo está disponible para roles internos autorizados.');
+      return;
+    }
+
+    setBusy(true);
+    setErrorMessage('');
+    setNotice('');
+    const { data, error } = await supabase.functions.invoke<{
+      user_id: string;
+      email: string;
+      role_id: string;
+      temporary_password?: string;
+    }>(
+      'invite-business-user',
+      {
+        body: {
+          email: newUserEmail.trim(),
+          display_name: newUserName.trim(),
+          role_id: newUserRole,
+          delivery: inviteDelivery,
+        },
+        headers: { Authorization: `Bearer ${session?.access_token ?? ''}` },
+      },
+    );
+    setBusy(false);
+    if (error) {
+      setErrorMessage(`No se pudo invitar al usuario: ${await getFunctionErrorMessage(error)}`);
+      return;
+    }
+    if (!data?.user_id) {
+      setErrorMessage('La solicitud se procesó, pero no se recibió la confirmación de la cuenta.');
+      return;
+    }
+    if (inviteDelivery === 'temporary_password' && !data.temporary_password) {
+      setErrorMessage('La cuenta se creó, pero no se recibió la contraseña temporal. Revisa la lista antes de repetir la operación.');
+      return;
+    }
+
+    setBusinessUsers(users => [
+      ...users.filter(user => user.user_id !== data.user_id),
+      {
+        user_id: data.user_id,
+        email: data.email,
+        display_name: newUserName.trim(),
+        is_active: true,
+        role_id: data.role_id,
+      },
+    ].sort((first, second) => first.email.localeCompare(second.email)));
+    setNewUserName('');
+    setNewUserEmail('');
+    setNewUserRole('unassigned');
+    setInviteDelivery('email');
+    setShowUserForm(false);
+    setTemporaryCredentials(data.temporary_password ? { email: data.email, password: data.temporary_password } : null);
+    setNotice(data.temporary_password
+      ? `Cuenta creada para ${data.email}. Comparte la contraseña temporal por un canal seguro.`
+      : `Invitación enviada a ${data.email}.`);
+  };
+
+  const copyTemporaryPassword = async () => {
+    if (!temporaryCredentials) return;
+    try {
+      await navigator.clipboard.writeText(temporaryCredentials.password);
+      setNotice('Contraseña temporal copiada. Compártela únicamente con la persona indicada.');
+    } catch (error) {
+      setErrorMessage(`No se pudo copiar al portapapeles: ${getErrorMessage(error)}`);
+    }
+  };
+
+  const changeTemporaryPassword = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (!supabase || !session) return;
+    if (newPassword.length < 12) {
+      setErrorMessage('La nueva contraseña debe tener al menos 12 caracteres.');
+      return;
+    }
+    if (newPassword !== confirmNewPassword) {
+      setErrorMessage('Las contraseñas no coinciden.');
+      return;
+    }
+
+    setBusy(true);
+    setErrorMessage('');
+    const { error: passwordError } = await supabase.auth.updateUser({ password: newPassword });
+    if (passwordError) {
+      setBusy(false);
+      setErrorMessage(`No se pudo actualizar la contraseña: ${passwordError.message}`);
+      return;
+    }
+    const { error: completionError } = await supabase.rpc('complete_business_user_password_setup');
+    setBusy(false);
+    if (completionError) {
+      setErrorMessage(`La contraseña cambió, pero no se pudo completar el acceso: ${completionError.message}. Intenta enviar el formulario nuevamente.`);
+      return;
+    }
+    setMustChangePassword(false);
+    setNewPassword('');
+    setConfirmNewPassword('');
+    setNotice('Contraseña actualizada. Tu cuenta ya está lista.');
   };
 
   const saveProject = async (event: FormEvent<HTMLFormElement>) => {
@@ -613,6 +963,8 @@ export default function Admin() {
           <label htmlFor="admin-password">Contraseña</label>
           <input id="admin-password" type="password" autoComplete="current-password" value={password} onChange={event => setPassword(event.target.value)} required />
           {errorMessage && <p className="admin-error" role="alert">{errorMessage}</p>}
+          {notice && <p className="admin-success" role="status">{notice}</p>}
+          <button className="admin-button admin-button-secondary" type="button" disabled={busy} onClick={() => void resendVerificationEmail()}>Enviar enlace de verificación</button>
           <button className="admin-button" type="submit" disabled={busy}>{busy ? 'Verificando…' : <>Iniciar sesión <span aria-hidden="true">→</span></>}</button>
           <p className="admin-login-footnote">Acceso privado para el equipo de Dn Craft &amp; Loop</p>
         </form>
@@ -624,15 +976,108 @@ export default function Admin() {
     return <main className="admin-page admin-centered"><p className="admin-loading">Verificando permisos…</p></main>;
   }
 
+  if (mustChangePassword === null) {
+    return <main className="admin-page admin-centered"><p className="admin-loading">Verificando seguridad de la cuenta…</p></main>;
+  }
+
+  if (mustChangePassword) {
+    return (
+      <main className="admin-page admin-access-page">
+        <div className="admin-access-shell">
+          <header className="admin-access-header">
+            <a className="admin-brand" href="/" aria-label="Dn Craft & Loop, página principal"><img src={logo} alt="" /></a>
+            <span className="admin-status is-draft"><i />Primer acceso</span>
+          </header>
+          <form className="admin-password-setup" onSubmit={changeTemporaryPassword}>
+            <span className="admin-eyebrow">PROTEGE TU CUENTA</span>
+            <h1>Crea tu contraseña personal</h1>
+            <p>La contraseña temporal debe reemplazarse antes de continuar. Usa al menos 12 caracteres y no la compartas.</p>
+            <label htmlFor="new-business-password">Nueva contraseña<input id="new-business-password" type="password" autoComplete="new-password" minLength={12} value={newPassword} onChange={event => setNewPassword(event.target.value)} required /></label>
+            <label htmlFor="confirm-business-password">Confirmar contraseña<input id="confirm-business-password" type="password" autoComplete="new-password" minLength={12} value={confirmNewPassword} onChange={event => setConfirmNewPassword(event.target.value)} required /></label>
+            {errorMessage && <p className="admin-error" role="alert">{errorMessage}</p>}
+            <button className="admin-button" type="submit" disabled={busy}>{busy ? 'Actualizando…' : <>Guardar contraseña <span aria-hidden="true">→</span></>}</button>
+            <button className="admin-button admin-button-secondary" type="button" disabled={busy} onClick={() => void supabase?.auth.signOut()}>Cerrar sesión</button>
+          </form>
+        </div>
+      </main>
+    );
+  }
+
+  const verificationExpired = Boolean(
+    myProfile?.requires_email_verification
+    && !myProfile.email_verified_at
+    && myProfile.email_verification_deadline
+    && expiredVerificationDeadline === myProfile.email_verification_deadline,
+  );
+
+  if (verificationExpired) {
+    return (
+      <main className="admin-page admin-centered">
+        <section className="admin-panel">
+          <span className="admin-eyebrow">VERIFICACIÓN PENDIENTE</span>
+          <h1>El plazo de verificación venció</h1>
+          <p>El acceso a las áreas protegidas se bloqueó. Solicita un enlace nuevo y verifica el correo para recuperar el acceso.</p>
+          {errorMessage && <p className="admin-error" role="alert">{errorMessage}</p>}
+          {notice && <p className="admin-success" role="status">{notice}</p>}
+          <button className="admin-button" type="button" disabled={busy} onClick={() => void resendVerificationEmail(myProfile?.email ?? '')}>{busy ? 'Enviando…' : 'Enviar enlace de verificación'}</button>
+          <button className="admin-button admin-button-secondary" type="button" onClick={() => void supabase?.auth.signOut()}>Cerrar sesión</button>
+        </section>
+      </main>
+    );
+  }
+
   if (!hasCmsAccess) {
     return (
-      <main className="admin-page">
-        <section className="admin-panel">
-          <h1>Acceso no autorizado</h1>
-          <p>Esta cuenta no tiene asignado un rol con permiso para administrar el sitio.</p>
-          {errorMessage && <p className="admin-error" role="alert">{errorMessage}</p>}
-          <button className="admin-button" onClick={() => void supabase?.auth.signOut()}>Cerrar sesión</button>
-        </section>
+      <main className="admin-page admin-access-page">
+        <div className="admin-access-shell">
+          <header className="admin-access-header">
+            <a className="admin-brand" href="/" aria-label="Dn Craft & Loop, página principal"><img src={logo} alt="" /></a>
+            <button className="admin-button admin-button-secondary" onClick={() => void supabase?.auth.signOut()}><span aria-hidden="true">↪</span> Cerrar sesión</button>
+          </header>
+          <section className="admin-access-content">
+            <span className="admin-eyebrow">PLATAFORMA Dn CRAFT &amp; LOOP</span>
+            <h1>Bienvenido{currentAccess?.role ? `, ${currentAccess.role.name}` : ''}</h1>
+            <p className="admin-access-lead">
+              {currentAccess?.role?.description ?? 'Tu cuenta inició sesión correctamente.'}
+            </p>
+            {myProfile && (
+              <ProfileView
+                profile={myProfile}
+                roleLabel={currentAccess?.role?.name ?? 'Sin rol asignado'}
+                name={profileName}
+                busy={busy}
+                onNameChange={setProfileName}
+                onSubmit={saveMyProfile}
+                onResendVerification={() => void resendVerificationEmail(myProfile.email)}
+              />
+            )}
+            {accessDetailsError ? (
+              <p className="admin-error" role="alert">No se pudieron consultar los detalles de tu rol: {accessDetailsError}</p>
+            ) : !currentAccess ? (
+              <p className="admin-loading"><span className="admin-spinner" />Cargando tus permisos…</p>
+            ) : !currentAccess.isActive ? (
+              <div className="admin-access-notice"><strong>Cuenta desactivada</strong><p>Contacta con la persona propietaria de la plataforma para revisar tu acceso.</p></div>
+            ) : currentAccess.role ? (
+              <>
+                <div className="admin-access-notice"><strong>Tu invitación fue aceptada y tu cuenta está activa.</strong><p>El área de administración del sitio no está incluida en tu rol, pero aquí puedes consultar el alcance de tu acceso.</p></div>
+                <div className="admin-access-modules">
+                  <h2>Áreas habilitadas</h2>
+                  {currentAccess.modules.length ? currentAccess.modules.map(module => (
+                    <article className="admin-access-module" key={module}>
+                      <span className="admin-access-module-icon" aria-hidden="true">◇</span>
+                      <div><h3>{permissionModuleNames[module] ?? module}</h3><p>{accessModuleDescriptions[module] ?? 'Acceso según los permisos de tu cuenta.'}</p></div>
+                      <span className="admin-access-module-status">En preparación</span>
+                    </article>
+                  )) : <p className="admin-access-empty">Este rol aún no tiene áreas habilitadas. Contacta con la persona administradora si crees que es un error.</p>}
+                </div>
+                <p className="admin-access-footnote">Las áreas operativas se están incorporando al panel. Por ahora, sus funciones y datos todavía no están disponibles.</p>
+              </>
+            ) : (
+              <div className="admin-access-notice"><strong>Tu cuenta aún no tiene un rol asignado.</strong><p>La cuenta se creó correctamente. Pide a la persona propietaria que asigne o revise tu rol en Usuarios y roles.</p></div>
+            )}
+            {errorMessage && <p className="admin-error" role="alert">{errorMessage}</p>}
+          </section>
+        </div>
       </main>
     );
   }
@@ -648,6 +1093,7 @@ export default function Admin() {
             <button className={tab === 'services' ? 'active' : ''} aria-current={tab === 'services' ? 'page' : undefined} onClick={() => setTab('services')}><span className="admin-nav-icon" aria-hidden="true">◇</span> Servicios <span className="admin-nav-count">{services.length}</span></button>
             <button className={tab === 'copy' ? 'active' : ''} aria-current={tab === 'copy' ? 'page' : undefined} onClick={() => setTab('copy')}><span className="admin-nav-icon" aria-hidden="true">Aa</span> Textos del sitio</button>
             {canManageUsers && <button className={tab === 'users' ? 'active' : ''} aria-current={tab === 'users' ? 'page' : undefined} onClick={() => setTab('users')}><span className="admin-nav-icon" aria-hidden="true">♙</span> Usuarios y roles</button>}
+            <button className={tab === 'profile' ? 'active' : ''} aria-current={tab === 'profile' ? 'page' : undefined} onClick={() => setTab('profile')}><span className="admin-nav-icon" aria-hidden="true">◎</span> Mi perfil</button>
           </nav>
           <div className="admin-sidebar-bottom">
             <span className="admin-online-dot" />
@@ -657,7 +1103,7 @@ export default function Admin() {
 
         <div className="admin-main">
           <header className="admin-header">
-            <div><p className="admin-eyebrow">ESCRITORIO / {tab === 'projects' ? 'PROYECTOS' : tab === 'services' ? 'SERVICIOS' : tab === 'copy' ? 'CONTENIDO' : 'USUARIOS'}</p><h1>{tab === 'projects' ? 'Proyectos' : tab === 'services' ? 'Servicios' : tab === 'copy' ? 'Textos del sitio' : 'Usuarios y roles'}</h1><p>{tab === 'users' ? 'Asigna a cada persona el nivel de acceso que necesita.' : 'Gestiona el contenido que se muestra en tu página.'}</p></div>
+            <div><p className="admin-eyebrow">ESCRITORIO / {tab === 'projects' ? 'PROYECTOS' : tab === 'services' ? 'SERVICIOS' : tab === 'copy' ? 'CONTENIDO' : tab === 'users' ? 'USUARIOS' : 'PERFIL'}</p><h1>{tab === 'projects' ? 'Proyectos' : tab === 'services' ? 'Servicios' : tab === 'copy' ? 'Textos del sitio' : tab === 'users' ? 'Usuarios y roles' : 'Mi perfil'}</h1><p>{tab === 'users' ? 'Asigna a cada persona el nivel de acceso que necesita.' : tab === 'profile' ? 'Administra los datos personales de tu cuenta.' : 'Gestiona el contenido que se muestra en tu página.'}</p></div>
             <div className="admin-header-actions"><a className="admin-link" href="/" target="_blank" rel="noreferrer"><span aria-hidden="true">↗</span> Ver sitio</a><button className="admin-button admin-button-secondary" onClick={() => void supabase?.auth.signOut()}><span aria-hidden="true">↪</span> Cerrar sesión</button></div>
           </header>
           {errorMessage && <p className="admin-error admin-alert" role="alert"><span aria-hidden="true">!</span>{errorMessage}</p>}
@@ -784,8 +1230,60 @@ export default function Admin() {
                   <article className="admin-summary-card"><span className="admin-summary-icon">♙</span><div><span>Usuarios registrados</span><strong>{businessUsers.length}</strong></div></article>
                   <article className="admin-summary-card"><span className="admin-summary-icon published">◇</span><div><span>Roles disponibles</span><strong>{businessRoles.length}</strong></div></article>
                 </div>
-                <div className="admin-section-heading"><div><h2>Equipo y accesos</h2><p>Cada persona ve únicamente las áreas permitidas por su rol.</p></div></div>
-                <p className="admin-info-note">Para invitar a alguien, crea primero su cuenta en Supabase: Authentication → Users → Invite user. Después de aceptar la invitación e iniciar sesión, aparecerá aquí para asignarle un rol.</p>
+                <div className="admin-section-heading"><div><h2>Equipo y accesos</h2><p>Cada persona ve únicamente las áreas permitidas por su rol.</p></div><button className="admin-button" type="button" onClick={() => { setShowUserForm(open => !open); setErrorMessage(''); }}><span aria-hidden="true">＋</span> Crear usuario</button></div>
+                {showUserForm && (
+                  <form className="admin-form admin-user-create-form" onSubmit={inviteBusinessUser}>
+                    <div className="admin-form-heading">
+                      <div><span className="admin-eyebrow">NUEVO ACCESO</span><h3>{inviteDelivery === 'email' ? 'Invitar a una persona' : 'Crear cuenta interna'}</h3></div>
+                      <button className="admin-close-button" type="button" aria-label="Cerrar formulario" onClick={() => setShowUserForm(false)}>×</button>
+                    </div>
+                    <p className="admin-editor-hint">{inviteDelivery === 'email' ? 'Enviaremos una invitación por correo para que la persona configure su propia contraseña.' : 'La persona recibirá una contraseña temporal y un enlace para verificar su correo. Tendrá 7 días para verificarlo y cambiará la contraseña temporal al entrar.'}</p>
+                    <div className="admin-form-grid">
+                      <label>Nombre<input autoComplete="name" value={newUserName} onChange={event => setNewUserName(event.target.value)} placeholder="Nombre de la persona" maxLength={100} required /></label>
+                      <label>Correo electrónico<input type="email" autoComplete="email" value={newUserEmail} onChange={event => setNewUserEmail(event.target.value)} placeholder="nombre@empresa.com" maxLength={254} required /></label>
+                      <ChoiceSelect
+                        className="admin-new-user-delivery"
+                        label="Método de acceso"
+                        value={inviteDelivery}
+                        options={inviteDeliveryOptions}
+                        onChange={value => {
+                          setInviteDelivery(value);
+                          if (value === 'temporary_password' && !temporaryPasswordRoleIds.has(newUserRole)) {
+                            setNewUserRole('unassigned');
+                          }
+                        }}
+                        disabled={busy}
+                      />
+                      <ChoiceSelect
+                        className="admin-new-user-role"
+                        label="Rol inicial"
+                        value={newUserRole}
+                        options={[unassignedRoleOption, ...businessRoles.filter(role => (
+                          role.id !== 'owner'
+                          && (inviteDelivery === 'email' || temporaryPasswordRoleIds.has(role.id))
+                        )).map(role => ({
+                          value: role.id,
+                          label: role.name,
+                          icon: '♙',
+                          description: role.description,
+                        }))]}
+                        onChange={setNewUserRole}
+                        disabled={busy}
+                      />
+                    </div>
+                    {inviteDelivery === 'temporary_password' && <p className="admin-warning-note">Se enviará un correo de verificación. Configura SMTP en Supabase para entregarlo a cualquier dirección; sin SMTP, la creación se cancela. La contraseña se mostrará una sola vez y solo debe compartirse por un canal seguro.</p>}
+                    <div className="admin-form-actions"><button className="admin-button" type="submit" disabled={busy || businessRoles.length <= 1}>{busy ? (inviteDelivery === 'email' ? 'Enviando invitación…' : 'Creando cuenta…') : <>{inviteDelivery === 'email' ? 'Enviar invitación' : 'Crear cuenta'} <span aria-hidden="true">→</span></>}</button><button className="admin-button admin-button-secondary" type="button" onClick={() => setShowUserForm(false)}>Cancelar</button></div>
+                  </form>
+                )}
+                {temporaryCredentials && (
+                  <div className="admin-temp-credentials" role="status">
+                    <div><span className="admin-eyebrow">COPIA ÚNICA</span><h3>Cuenta creada y correo de verificación enviado</h3><p>Entrega la contraseña temporal por un canal seguro. La persona debe verificar su correo en 7 días y después cambiar la contraseña al iniciar sesión.</p></div>
+                    <label>Correo<input value={temporaryCredentials.email} readOnly /></label>
+                    <label>Contraseña temporal<input value={temporaryCredentials.password} readOnly autoComplete="off" /></label>
+                    <div className="admin-form-actions"><button className="admin-button" type="button" onClick={() => void copyTemporaryPassword()}>Copiar contraseña</button><button className="admin-button admin-button-secondary" type="button" onClick={() => setTemporaryCredentials(null)}>Ocultar contraseña</button></div>
+                  </div>
+                )}
+                <p className="admin-info-note">Las invitaciones y verificaciones por correo requieren un proveedor SMTP configurado en Supabase. Las cuentas temporales están limitadas a roles internos y tienen 7 días para verificar su dirección.</p>
                 <div className="admin-list">
                   {businessUsers.map(user => {
                     const role = businessRoles.find(item => item.id === user.role_id);
@@ -882,6 +1380,19 @@ export default function Admin() {
               {['Inicio', 'Servicios', 'Proceso', 'Proyectos', 'Llamada a la acción', 'Contacto'].map(section => <fieldset className="admin-copy-group" key={section}><legend>{section}</legend>{copyFields.filter(field => field.section === section).map(field => <label key={field.key}>{field.label}{field.multiline ? <textarea rows={3} value={copy[field.key]} onChange={event => setCopy({ ...copy, [field.key]: event.target.value })} /> : <input value={copy[field.key]} onChange={event => setCopy({ ...copy, [field.key]: event.target.value })} />}</label>)}</fieldset>)}
               <button className="admin-button" type="submit" disabled={busy}>Guardar textos</button>
             </form>
+          </section>
+        )}
+        {tab === 'profile' && myProfile && (
+          <section className="admin-section">
+            <ProfileView
+              profile={myProfile}
+              roleLabel={canManageUsers ? 'Administración de usuarios' : 'Equipo de Dn Craft & Loop'}
+              name={profileName}
+              busy={busy}
+              onNameChange={setProfileName}
+              onSubmit={saveMyProfile}
+              onResendVerification={() => void resendVerificationEmail(myProfile.email)}
+            />
           </section>
         )}
         </div>
